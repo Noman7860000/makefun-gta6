@@ -1,198 +1,228 @@
-// SUNSET BAY — story missions. Five jobs for fixer Slim Vasquez and Rosa Marín,
-// played in order. Each mission is a list of steps; the runner interprets them
-// against the live game context (player, car, wanted, events). Classic script.
+// SUNSET BAY — missions: the five story jobs, their steps, dialogue,
+// timers and rewards. Written fresh for this entry.
+window.SB = window.SB || {};
 
-(function (global) {
+(function () {
   'use strict';
+  const U = window.SB.util;
 
-  // Step types:
-  //  goto {at, r, needCar?, text} — reach a point
-  //  stealCar {text, specific?} — get into a car (any, or the marked one)
-  //  pickup {at, count, text} — crew members walk to your car
-  //  fight {at, count, text} — defeat N enemies spawned at the point
-  //  rob {at, r, seconds, text} — stand in the zone while the meter fills
-  //  loseHeat {text} — get wanted down to zero
-  //  deliver {at, r, timeLimit?, text} — reach a point in a car, optional timer
-  // Steps may carry `say` (dialogue lines) and `want` (wanted stars to set on entry).
+  const DEFS = {
+    m1: {
+      name: 'First Wheels',
+      giver: 'Slim Vasquez',
+      reward: 300,
+      intro: 'Slim: "Cole, you need wheels. Jack a parked car and bring it to my garage. Quiet-like."',
+      steps: [
+        { text: 'Steal a parked car', hint: 'Walk up to a parked car and press E' },
+        { text: 'Drive it to the garage', hint: 'Follow the yellow marker to the garage' },
+      ],
+    },
+    m2: {
+      name: 'The Getaway',
+      giver: 'Rosa Marín',
+      reward: 600,
+      intro: 'Rosa: "Two of my crew are waiting at the docks. Pick them up — then lose the cops at the safehouse."',
+      steps: [
+        { text: 'Pick up the crew at the docks', hint: 'Get a car and drive to the docks so the crew can board' },
+        { text: 'Escape to the safehouse', hint: 'Wanted level 2 — reach the safehouse' },
+      ],
+    },
+    m3: {
+      name: 'Hot Delivery',
+      giver: 'Slim Vasquez',
+      reward: 500,
+      intro: 'Slim: "A package is waiting at the docks. Get it to the mall — you have 90 seconds once you grab it."',
+      steps: [
+        { text: 'Pick up the package at the docks', hint: 'Go to the docks on foot or by car' },
+        { text: 'Deliver it to the mall in 90s', hint: 'Drive fast — the timer is running' },
+      ],
+    },
+    m4: {
+      name: 'Repo Man',
+      giver: 'Rosa Marín',
+      reward: 800,
+      intro: 'Rosa: "A gold sedan at the casino belongs to a man who stopped paying. Handle the guards, then bring it to the garage in one piece."',
+      steps: [
+        { text: 'Beat down the two guards', hint: 'Get close and press F to punch' },
+        { text: 'Steal the gold car, deliver it to the garage', hint: 'Keep its health above 40' },
+      ],
+    },
+    m5: {
+      name: 'The Sunset Heist',
+      giver: 'Slim Vasquez',
+      reward: 2500,
+      intro: 'Slim: "The big one, Cole. The casino vault. Stay in the vault zone for 8 seconds — then run for the safehouse."',
+      steps: [
+        { text: 'Crack the vault at the casino', hint: 'Stand in the vault zone for 8 seconds' },
+        { text: 'Escape to the safehouse', hint: 'The alarm trips 3 stars — get to the safehouse' },
+      ],
+    },
+  };
 
-  function missionList(L) {
-    return [
-      {
-        id: 'm1', title: 'First Wheels', giver: 'Slim Vasquez', reward: 300,
-        brief: 'Slim needs a car, no questions asked. Jack one off the street and bring it to his garage.',
-        intro: [
-          { who: 'Slim', text: 'Cole, baby. I need wheels, and I need them hot.' },
-          { who: 'Cole', text: 'You always need something, Slim.' },
-          { who: 'Slim', text: 'Walk up to a parked car, press E, and drive it to my garage. Easy money.' },
-        ],
-        steps: [
-          { type: 'stealCar', text: 'Steal a car (walk up to one and press E)' },
-          { type: 'goto', at: L.garage, r: 8, needCar: true, text: "Drive the car to Slim's garage" },
-        ],
-      },
-      {
-        id: 'm2', title: 'The Getaway', giver: 'Slim Vasquez', reward: 600,
-        brief: 'Slim\u2019s crew hit a warehouse at the docks. Pick them up and lose the cops.',
-        intro: [
-          { who: 'Slim', text: 'My boys are stuck at the docks with the law breathing down their necks.' },
-          { who: 'Slim', text: 'Pick them up. And Cole? Drive like your life depends on it. It does.' },
-        ],
-        steps: [
-          { type: 'pickup', at: L.docks, count: 2, text: 'Pick up the crew at the docks' },
-          { type: 'goto', at: L.safehouse, r: 9, needCar: true, want: 2, text: 'Escape to the safehouse — lose the cops on the way', say: [{ who: 'Crew', text: 'Cops! Go go go!' }] },
-        ],
-      },
-      {
-        id: 'm3', title: 'Hot Delivery', giver: 'Rosa Marín', reward: 500,
-        brief: 'A package at the docks. The mall. Ninety seconds. The cops are already curious.',
-        intro: [
-          { who: 'Rosa', text: 'One package, one driver, no mistakes. The docks, then the mall.' },
-          { who: 'Rosa', text: 'Ninety seconds once you have it. The police will be watching.' },
-        ],
-        steps: [
-          { type: 'goto', at: L.docks, r: 6, text: 'Pick up the package at the docks' },
-          { type: 'deliver', at: L.mall, r: 8, timeLimit: 90, want: 1, text: 'Deliver to the mall — 90 seconds!', say: [{ who: 'Rosa', text: 'Clock is running, Cole. Move!' }] },
-        ],
-      },
-      {
-        id: 'm4', title: 'Repo Man', giver: 'Slim Vasquez', reward: 800,
-        brief: 'A gold sports car at the casino belongs to Slim now. Two guards disagree. Bring it back in one piece.',
-        intro: [
-          { who: 'Slim', text: 'There is a gold comet sitting at the casino. It has my name on it. Spiritually.' },
-          { who: 'Slim', text: 'Two guards. Handle them, take the car, bring it to my garage. Don\u2019t scratch it.' },
-        ],
-        steps: [
-          { type: 'fight', at: L.casino, count: 2, text: 'Deal with the guards at the casino' },
-          { type: 'stealCar', specific: true, at: L.casino, text: 'Steal the gold car' },
-          { type: 'goto', at: L.garage, r: 8, needCar: true, text: "Deliver the gold car to Slim's garage", keepHp: 40 },
-        ],
-      },
-      {
-        id: 'm5', title: 'The Sunset Heist', giver: 'Rosa Marín', reward: 2500,
-        brief: 'The big one. Crack the casino vault, grab the cash, and vanish into the sunset.',
-        intro: [
-          { who: 'Rosa', text: 'The casino vault. Eight seconds inside and we are rich. The hard part is leaving.' },
-          { who: 'Rosa', text: 'Three stars the moment the alarm trips. Get to the safehouse, Cole. Don\u2019t look back.' },
-        ],
-        steps: [
-          { type: 'rob', at: L.casino, r: 7, seconds: 8, text: 'Crack the vault — stay in the zone' },
-          { type: 'goto', at: L.safehouse, r: 9, want: 3, text: 'Escape to the safehouse with the cash', say: [{ who: 'Rosa', text: 'Alarm is up! Every cop in Sunset Bay is coming. GO!' }] },
-        ],
-      },
-    ];
+  // Step targets per mission/step: [x, z] or null (no single target).
+  function stepTarget(id, step) {
+    const L = U.LANDMARKS;
+    if (id === 'm1') return step === 0 ? null : [L.garage.x, L.garage.z];
+    if (id === 'm2') return step === 0 ? [L.docks.x, L.docks.z] : [L.safehouse.x, L.safehouse.z];
+    if (id === 'm3') return step === 0 ? [L.docks.x, L.docks.z] : [L.mall.x, L.mall.z];
+    if (id === 'm4') return step === 0 ? [L.casino.x, L.casino.z] : [L.garage.x, L.garage.z];
+    if (id === 'm5') return step === 0 ? [L.casino.x, L.casino.z] : [L.safehouse.x, L.safehouse.z];
+    return null;
   }
 
-  // The runner. ctx is supplied by game.js each frame:
-  // { playerPos, inCar, car, wanted, setWanted(n), events[], say(who,text),
-  //   setObjective(text, marker), spawnEnemies(at,count), spawnCrew(at,count),
-  //   spawnMarkedCar(at), markedCar, crewInCar, addCash(n), onFail(reason) }
-  function MissionRunner(list) {
-    this.list = list;
-    this.current = null;   // mission object
-    this.stepIdx = 0;
-    this.stepState = {};   // per-step scratch
-    this.timer = 0;
-    this.active = false;
-    this.completed = [];   // ids
-  }
+  function createMissions(game, actors) {
+    const M = {
+      defs: DEFS,
+      id: null,
+      step: 0,
+      timer: 0,
+      holdProgress: 0,
+      stepTarget,
+    };
 
-  MissionRunner.prototype.start = function (id, ctx) {
-    const m = this.list.find((x) => x.id === id);
-    if (!m) return false;
-    this.current = m;
-    this.stepIdx = 0;
-    this.stepState = {};
-    this.active = true;
-    this.timer = 0;
-    this._enterStep(ctx);
-    if (m.intro) m.intro.forEach((l) => ctx.say(l.who, l.text));
-    return true;
-  };
-
-  MissionRunner.prototype._step = function () {
-    return this.current ? this.current.steps[this.stepIdx] : null;
-  };
-
-  MissionRunner.prototype._enterStep = function (ctx) {
-    const s = this._step();
-    this.stepState = {};
-    this.timer = 0;
-    if (!s) return;
-    if (s.want !== undefined) ctx.setWanted(s.want);
-    if (s.say) s.say.forEach((l) => ctx.say(l.who, l.text));
-    if (s.type === 'fight') ctx.spawnEnemies(s.at, s.count);
-    if (s.type === 'pickup') ctx.spawnCrew(s.at, s.count);
-    if (s.type === 'stealCar' && s.specific) ctx.spawnMarkedCar(s.at);
-    ctx.setObjective(s.text, s.at || null);
-  };
-
-  MissionRunner.prototype._next = function (ctx) {
-    this.stepIdx++;
-    if (this.stepIdx >= this.current.steps.length) {
-      this._complete(ctx);
-    } else {
-      this._enterStep(ctx);
-    }
-  };
-
-  MissionRunner.prototype._complete = function (ctx) {
-    const m = this.current;
-    this.completed.push(m.id);
-    this.active = false;
-    ctx.addCash(m.reward);
-    ctx.setObjective('Mission complete: ' + m.title + '  +' + '$' + m.reward, null);
-    ctx.jingle();
-    this.current = null;
-    this.stepIdx = 0;
-  };
-
-  MissionRunner.prototype.fail = function (ctx, reason) {
-    this.active = false;
-    this.current = null;
-    this.stepIdx = 0;
-    ctx.setObjective('', null);
-    if (ctx.onFail) ctx.onFail(reason);
-  };
-
-  MissionRunner.prototype.update = function (dt, ctx) {
-    if (!this.active || !this.current) return;
-    const s = this._step();
-    if (!s) return;
-    this.timer += dt;
-    const px = ctx.playerPos.x, pz = ctx.playerPos.z;
-    const d = s.at ? Math.hypot(px - s.at.x, pz - s.at.z) : 9999;
-
-    if (s.type === 'goto') {
-      if (d < s.r && (!s.needCar || ctx.inCar)) this._next(ctx);
-    } else if (s.type === 'stealCar') {
-      if (ctx.inCar && (!s.specific || ctx.inMarkedCar)) this._next(ctx);
-    } else if (s.type === 'pickup') {
-      if (ctx.crewInCar >= s.count) this._next(ctx);
-      else if (ctx.inCar && d < 14) ctx.crewBoard();
-    } else if (s.type === 'fight') {
-      if (ctx.enemiesDown >= s.count) this._next(ctx);
-    } else if (s.type === 'rob') {
-      if (d < s.r) {
-        this.stepState.held = (this.stepState.held || 0) + dt;
-        ctx.setProgress(this.stepState.held / s.seconds);
-        if (this.stepState.held >= s.seconds) { ctx.setProgress(0); this._next(ctx); }
-      } else {
-        this.stepState.held = Math.max(0, (this.stepState.held || 0) - dt * 2);
-        ctx.setProgress(this.stepState.held / s.seconds);
+    M.start = function (id) {
+      if (!DEFS[id]) return false;
+      M.cancel();
+      M.id = id;
+      M.step = 0;
+      M.timer = 0;
+      M.holdProgress = 0;
+      const def = DEFS[id];
+      game.say(def.giver, def.intro);
+      game.toast('Mission started: ' + def.name + ' — $' + def.reward);
+      if (id === 'm2') actors.spawnCrew();
+      if (id === 'm4') {
+        actors.spawnGuards();
+        actors.spawnGoldCar();
       }
-    } else if (s.type === 'deliver') {
-      const left = s.timeLimit - this.timer;
-      ctx.setTimer(Math.max(0, left));
-      if (d < s.r && ctx.inCar) { ctx.setTimer(0); this._next(ctx); }
-      else if (left <= 0) { ctx.setTimer(0); this.fail(ctx, 'Delivery too slow — the buyer walked.'); }
-    } else if (s.type === 'loseHeat') {
-      if (ctx.wanted === 0) this._next(ctx);
-    }
-    // Car-wreck guard for repo job.
-    if (s.keepHp && ctx.inCar && ctx.car && ctx.car.hp < s.keepHp) {
-      this.fail(ctx, 'The car is too damaged — Slim will not pay for a wreck.');
-    }
-  };
+      game.refreshMissionList();
+      return true;
+    };
 
-  global.SBMissions = { missionList: missionList, MissionRunner: MissionRunner };
-})(window);
+    M.cancel = function () {
+      if (!M.id) return;
+      M.id = null;
+      M.step = 0;
+      M.timer = 0;
+      M.holdProgress = 0;
+      actors.clearCrew();
+      actors.clearEnemies();
+      actors.clearMarkedCar();
+      game.refreshMissionList();
+    };
+
+    M.objective = function () {
+      if (!M.id) return 'Free roam — press M for missions';
+      const def = DEFS[M.id];
+      return def.name + ': ' + def.steps[M.step].text;
+    };
+
+    M.target = function () {
+      if (!M.id) return null;
+      const t = stepTarget(M.id, M.step);
+      return t ? { x: t[0], z: t[1] } : null;
+    };
+
+    M.complete = function () {
+      const def = DEFS[M.id];
+      game.cash += def.reward;
+      game.completed.push(M.id);
+      game.toast('Mission complete: ' + def.name + ' — +$' + def.reward);
+      SB.audio.cash();
+      SB.audio.jingle();
+      const done = M.id;
+      M.id = null;
+      M.step = 0;
+      M.timer = 0;
+      M.holdProgress = 0;
+      actors.clearCrew();
+      actors.clearEnemies();
+      actors.clearMarkedCar();
+      game.refreshMissionList();
+      game.save();
+      return done;
+    };
+
+    M.fail = function (why) {
+      const def = DEFS[M.id];
+      game.toast('Mission failed: ' + def.name + ' — ' + why);
+      SB.audio.fail();
+      M.cancel();
+    };
+
+    // Per-frame mission logic. Called by the game loop while playing.
+    M.update = function (dt) {
+      if (!M.id) return;
+      const p = actors.player;
+      const pc = actors.playerCar;
+      const L = U.LANDMARKS;
+      const at = (lm, r) => U.dist2(p.x, p.z, lm.x, lm.z) < (r || 12);
+
+      if (M.id === 'm1') {
+        if (M.step === 0 && pc) {
+          M.step = 1;
+          game.say('Slim Vasquez', 'Slim: "Good. Now bring it to my garage — the yellow marker."');
+          game.refreshMissionList();
+        } else if (M.step === 1 && pc && at(L.garage)) {
+          M.complete();
+        }
+      } else if (M.id === 'm2') {
+        if (M.step === 0 && actors.crewInCar >= 2) {
+          M.step = 1;
+          game.setWanted(2);
+          game.say('Rosa Marín', 'Rosa: "Crew\'s in! Cops are on you — get to the safehouse!"');
+          game.refreshMissionList();
+        } else if (M.step === 1 && at(L.safehouse)) {
+          M.complete();
+        }
+      } else if (M.id === 'm3') {
+        if (M.step === 0 && at(L.docks, 10)) {
+          M.step = 1;
+          M.timer = 90;
+          game.say('Slim Vasquez', 'Slim: "Package in hand. Mall. 90 seconds. Go!"');
+          SB.audio.pickup();
+          game.refreshMissionList();
+        } else if (M.step === 1) {
+          M.timer -= dt;
+          if (M.timer <= 0) {
+            M.fail('the delivery was too slow');
+          } else if (at(L.mall)) {
+            M.complete();
+          }
+        }
+      } else if (M.id === 'm4') {
+        if (M.step === 0 && actors.enemiesDown >= 2) {
+          M.step = 1;
+          game.say('Rosa Marín', 'Rosa: "Guards are down. Take the gold sedan to the garage — don\'t wreck it."');
+          game.refreshMissionList();
+        } else if (M.step === 1 && actors.inMarkedCar && at(L.garage)) {
+          if (pc && pc.hp >= 40) {
+            M.complete();
+          } else {
+            M.fail('the gold car arrived too damaged');
+          }
+        }
+      } else if (M.id === 'm5') {
+        if (M.step === 0) {
+          if (at(L.casino)) {
+            M.holdProgress += dt;
+            if (M.holdProgress >= 8) {
+              M.step = 1;
+              game.setWanted(3);
+              game.say('Slim Vasquez', 'Slim: "Vault\'s open! Alarm\'s screaming — 3 stars! RUN to the safehouse!"');
+              game.refreshMissionList();
+            }
+          } else {
+            M.holdProgress = Math.max(0, M.holdProgress - dt * 2);
+          }
+        } else if (M.step === 1 && at(L.safehouse)) {
+          M.complete();
+        }
+      }
+    };
+
+    return M;
+  }
+
+  window.SB.createMissions = createMissions;
+})();

@@ -1,10 +1,11 @@
-// SUNSET BAY — utilities: seeded RNG, math helpers, tiny event helpers.
-// Written fresh for the gta6-01 entry. Classic script, no modules.
+// SUNSET BAY — shared utilities and world constants.
+// Clean-room rewrite: every line written fresh for this entry.
+window.SB = window.SB || {};
 
-(function (global) {
+(function () {
   'use strict';
 
-  // mulberry32 — small, fast, deterministic. Same seed => same city every run.
+  // --- Deterministic RNG (mulberry32) -------------------------------------
   function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -15,54 +16,62 @@
     };
   }
 
-  function makeRng(seed) {
-    const next = mulberry32(seed);
-    return {
-      next: next,
-      range: function (min, max) { return min + next() * (max - min); },
-      int: function (min, max) { return Math.floor(min + next() * (max - min + 1)); },
-      pick: function (arr) { return arr[Math.floor(next() * arr.length)]; },
-      chance: function (p) { return next() < p; },
-    };
-  }
-
+  // --- Math helpers ---------------------------------------------------------
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
-  function damp(current, target, lambda, dt) {
-    // Frame-rate independent exponential approach.
-    return lerp(target, current, Math.exp(-lambda * dt));
-  }
-  // Shortest signed angle difference, radians.
-  function angleDiff(a, b) {
-    let d = (b - a) % (Math.PI * 2);
-    if (d > Math.PI) d -= Math.PI * 2;
-    if (d < -Math.PI) d += Math.PI * 2;
-    return d;
-  }
-  function angleLerp(a, b, t) { return a + angleDiff(a, b) * t; }
   function dist2(ax, az, bx, bz) {
     const dx = ax - bx, dz = az - bz;
-    return dx * dx + dz * dz;
+    return Math.sqrt(dx * dx + dz * dz);
   }
-  function dist(ax, az, bx, bz) { return Math.sqrt(dist2(ax, az, bx, bz)); }
-
-  // Format helpers for the HUD.
-  function fmtMoney(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
-  function fmtTime(sec) {
-    const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
-    return m + ':' + (s < 10 ? '0' : '') + s;
+  // Smallest signed difference between two headings (radians).
+  function angleDiff(a, b) {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return d;
   }
+  // Forward vector for a heading: heading 0 faces +z, PI/2 faces +x.
+  function forwardOf(heading) { return { x: Math.sin(heading), z: Math.cos(heading) }; }
+  function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
 
-  global.SBUtil = {
-    makeRng: makeRng,
-    clamp: clamp,
-    lerp: lerp,
-    damp: damp,
-    angleDiff: angleDiff,
-    angleLerp: angleLerp,
-    dist: dist,
-    dist2: dist2,
-    fmtMoney: fmtMoney,
-    fmtTime: fmtTime,
+  // --- City layout ----------------------------------------------------------
+  // Road centre-lines on a 52 m grid. Roads are 10 m wide; blocks are 42 m.
+  const ROADS = [-208, -156, -104, -52, 0, 52, 104, 156, 208];
+  const WORLD_HALF = 232; // playable bounds
+  const ROAD_WIDTH = 10;
+
+  const LANDMARKS = {
+    garage:    { x: -156, z: 104,  r: 12, label: 'Garage' },
+    docks:     { x: -156, z: -156, r: 12, label: 'Docks' },
+    mall:      { x: -104, z: 0,    r: 12, label: 'Mall' },
+    casino:    { x: 104,  z: 104,  r: 12, label: 'Casino' },
+    safehouse: { x: 156,  z: 156,  r: 12, label: 'Safehouse' },
   };
-})(window);
+
+  function nearestRoadCoord(v) {
+    let best = ROADS[0], bd = 1e9;
+    for (const c of ROADS) {
+      const d = Math.abs(v - c);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  }
+  // Is a point on a road (within the road strip, plus a small margin)?
+  function isOnRoad(x, z) {
+    for (const c of ROADS) {
+      if (Math.abs(x - c) <= ROAD_WIDTH / 2 + 1) return true;
+      if (Math.abs(z - c) <= ROAD_WIDTH / 2 + 1) return true;
+    }
+    return false;
+  }
+
+  // --- DOM helper -----------------------------------------------------------
+  function el(id) { return document.getElementById(id); }
+  function show(node, on) { if (node) node.style.display = on ? 'flex' : 'none'; }
+
+  window.SB.util = {
+    mulberry32, clamp, lerp, dist2, angleDiff, forwardOf, pick,
+    ROADS, WORLD_HALF, ROAD_WIDTH, LANDMARKS, nearestRoadCoord, isOnRoad,
+    el, show,
+  };
+})();
