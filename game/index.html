@@ -3,17 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>SUNSET BAY — Open World Crime</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0d14; font-family: 'Segoe UI', Arial, sans-serif; color: #f0ead8; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+  .panel { background: rgba(10, 10, 18, 0.62); border: 1px solid rgba(255, 216, 0, 0.25); border-radius: 8px; padding: 8px 12px; }
+  #stats { position: absolute; top: 14px; left: 14px; min-width: 240px; }
+  #health-bar { width: 220px; height: 12px; background: #222; border-radius: 6px; overflow: hidden; margin: 4px 0; }
+  #health-fill { height: 100%; width: 100%; background: #3ac25e; transition: width 0.2s; }
+  #health-row { font-size: 13px; color: #ddd; }
+  #cash { font-size: 22px; font-weight: bold; color: #7dff8a; }
+  #stars { font-size: 24px; letter-spacing: 3px; color: #ffd800; text-shadow: 0 0 8px rgba(255, 216, 0, 0.5); }
+  #minimap-wrap { position: absolute; top: 14px; right: 14px; }
+  #minimap { width: 190px; height: 190px; border-radius: 8px; border: 2px solid rgba(255, 216, 0, 0.4); background: #101018; display: block; }
+  #objective { position: absolute; left: 50%; transform: translateX(-50%); bottom: 118px; text-align: center; font-size: 17px; font-weight: bold; color: #ffd800; text-shadow: 0 2px 4px #000; max-width: 70%; }
+  #obj-dist { color: #fff; font-weight: normal; margin-left: 8px; }
+  #subtitles { position: absolute; left: 50%; transform: translateX(-50%); bottom: 64px; max-width: 640px; text-align: center; background: rgba(0,0,0,0.65); padding: 8px 18px; border-radius: 8px; display: none; }
+  #sub-who { color: #ffd800; font-weight: bold; margin-right: 8px; }
+  #sub-text { color: #fff; }
+  #toasts { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); text-align: center; }
+  .toast { background: rgba(10,10,18,0.8); border: 1px solid rgba(255,216,0,0.4); border-radius: 6px; padding: 6px 14px; margin: 4px auto; font-size: 14px; animation: toastin 0.25s ease-out; }
+  @keyframes toastin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  #speed { position: absolute; right: 18px; bottom: 18px; font-size: 26px; font-weight: bold; color: #fff; text-shadow: 0 2px 4px #000; }
+  #hint { position: absolute; left: 14px; bottom: 14px; font-size: 12px; color: rgba(255,255,255,0.75); text-shadow: 0 1px 2px #000; }
+  #progress { position: absolute; left: 50%; transform: translateX(-50%); bottom: 160px; width: 320px; height: 14px; background: rgba(0,0,0,0.6); border: 1px solid #ffd800; border-radius: 7px; overflow: hidden; display: none; }
+  #progress-fill { height: 100%; width: 0%; background: #ffd800; }
+  #timer { position: absolute; left: 50%; transform: translateX(-50%); top: 16px; font-size: 30px; font-weight: bold; color: #ffd800; text-shadow: 0 2px 6px #000; display: none; }
+
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: linear-gradient(180deg, rgba(20,8,32,0.88), rgba(8,8,18,0.94)); z-index: 10; }
+  .screen h1 { font-size: 64px; margin: 0; letter-spacing: 6px; color: #ffd800; text-shadow: 0 0 24px rgba(255, 120, 0, 0.7), 0 4px 0 #7a2a00; font-style: italic; }
+  .screen h2 { font-size: 20px; color: #ff9a5a; margin: 4px 0 18px; letter-spacing: 3px; }
+  .screen p.story { max-width: 620px; text-align: center; line-height: 1.55; color: #e8e0cc; font-size: 15px; }
+  .controls { display: grid; grid-template-columns: auto auto; gap: 4px 18px; font-size: 13px; color: #cfc8b8; margin: 14px 0 20px; background: rgba(255,255,255,0.05); padding: 12px 20px; border-radius: 8px; }
+  .controls b { color: #ffd800; font-weight: bold; }
+  .btn { pointer-events: auto; cursor: pointer; background: linear-gradient(180deg, #ffd800, #e8a800); color: #1a1200; border: none; border-radius: 8px; padding: 12px 34px; font-size: 18px; font-weight: bold; margin: 6px; box-shadow: 0 4px 0 #7a5a00; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #7a5a00; }
+  .btn.ghost { background: rgba(255,255,255,0.1); color: #f0ead8; box-shadow: 0 4px 0 rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); }
+  .settings { margin-top: 16px; font-size: 13px; color: #cfc8b8; display: flex; gap: 22px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .settings label { display: flex; gap: 8px; align-items: center; }
+  .mission-item { pointer-events: auto; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,216,0,0.3); border-radius: 8px; padding: 10px 14px; margin: 6px 0; width: 560px; max-width: 88vw; font-size: 14px; line-height: 1.45; }
+  .mission-item:hover { background: rgba(255,216,0,0.12); }
+  .mission-item.done { border-color: #3ac25e; }
+  .mission-item.locked { opacity: 0.45; cursor: default; }
+  .mission-item .reward { color: #7dff8a; }
+  #mission-list { max-height: 55vh; overflow-y: auto; }
+  #end-title { font-size: 72px; color: #ff4444; }
+  #end-text { max-width: 560px; text-align: center; line-height: 1.5; }
+  #end-stats { margin: 14px 0; color: #ffd800; font-size: 15px; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<canvas id="game" aria-label="Sunset Bay: an open-world crime game. Drive, steal cars, run from the police and complete story missions."></canvas>
 <p id="status" role="status" aria-live="polite"></p>
-<script type="module" src="./src/main.js"></script>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="stats" class="panel">
+    <div id="health-row">HEALTH <span id="health-text">100</span></div>
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="cash">$250</div>
+    <div id="stars">☆☆☆☆☆</div>
+  </div>
+  <div id="minimap-wrap"><canvas id="minimap" width="190" height="190"></canvas></div>
+  <div id="timer">⏱ 0:00</div>
+  <div id="toasts"></div>
+  <div id="progress"><div id="progress-fill"></div></div>
+  <div id="objective">Free roam<span id="obj-dist"></span></div>
+  <div id="subtitles"><span id="sub-who"></span><span id="sub-text"></span></div>
+  <div id="speed"></div>
+  <div id="hint"></div>
+</div>
+
+<!-- Start menu -->
+<div id="menu" class="screen" style="display:flex">
+  <h1>SUNSET BAY</h1>
+  <h2>AN OPEN-WORLD CRIME STORY</h2>
+  <p class="story">Cole Vance came back to Sunset Bay with nothing but a busted car and a debt to
+    Slim Vasquez. One last score was supposed to clear it. Now the whole city — the fixers,
+    the gangs, the Sunset Bay PD — wants a piece of him. Steal cars, outrun the law, and
+    pull off five jobs to buy your way out.</p>
+  <div class="controls">
+    <span><b>WASD / Arrows</b></span><span>Move / drive</span>
+    <span><b>Shift</b></span><span>Run</span>
+    <span><b>Space</b></span><span>Jump</span>
+    <span><b>E</b></span><span>Steal / exit car</span>
+    <span><b>F / Click</b></span><span>Punch</span>
+    <span><b>Mouse drag</b></span><span>Camera · wheel zooms</span>
+    <span><b>H</b></span><span>Horn</span>
+    <span><b>C</b></span><span>Camera distance</span>
+    <span><b>T</b></span><span>Time of day</span>
+    <span><b>M</b></span><span>Missions</span>
+    <span><b>P / Esc</b></span><span>Pause</span>
+  </div>
+  <div>
+    <button class="btn" id="btn-start">START</button>
+    <button class="btn ghost" id="btn-continue" style="display:none">CONTINUE</button>
+    <button class="btn ghost" id="btn-missions">MISSIONS</button>
+  </div>
+  <div class="settings">
+    <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.7"></label>
+    <label><input type="checkbox" id="music" checked> Music</label>
+    <label>Mouse <input type="range" id="sens" min="0.3" max="2" step="0.1" value="1"></label>
+  </div>
+</div>
+
+<!-- Pause -->
+<div id="pause" class="screen">
+  <h1 style="font-size:44px">PAUSED</h1>
+  <p class="story">Take a breath, Cole. The city will wait.</p>
+  <div>
+    <button class="btn" id="btn-resume">RESUME</button>
+    <button class="btn ghost" id="btn-quit">QUIT TO MENU</button>
+  </div>
+  <div class="settings">
+    <label>Volume <input type="range" id="vol2" min="0" max="1" step="0.05" value="0.7" disabled></label>
+    <span>Use the menu sliders to change settings.</span>
+  </div>
+</div>
+
+<!-- Busted / Wasted -->
+<div id="end" class="screen">
+  <h1 id="end-title">BUSTED!</h1>
+  <p id="end-text"></p>
+  <div id="end-stats"></div>
+  <div>
+    <button class="btn" id="btn-respawn">PAY UP &amp; GO BACK OUT</button>
+    <button class="btn ghost" id="btn-end-menu">MAIN MENU</button>
+  </div>
+</div>
+
+<!-- Mission select -->
+<div id="missions" class="screen">
+  <h1 style="font-size:40px">MISSIONS</h1>
+  <p class="story">Jobs from Slim Vasquez and Rosa Marín. Finish one to unlock the next.</p>
+  <div id="mission-list"></div>
+  <button class="btn ghost" id="btn-close-missions">CLOSE</button>
+</div>
+
+<script src="./vendor/three.min.js"></script>
+<script src="./src/util.js"></script>
+<script src="./src/audio.js"></script>
+<script src="./src/world.js"></script>
+<script src="./src/actors.js"></script>
+<script src="./src/missions.js"></script>
+<script src="./src/game.js"></script>
+<script src="./src/main.js"></script>
 </body>
 </html>

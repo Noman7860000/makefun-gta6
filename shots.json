@@ -1,5 +1,1 @@
-[
-  { "name": "1-start.jpg", "query": "?shot=start&seed=1" },
-  { "name": "2-play.jpg", "query": "?shot=play&seed=1" },
-  { "name": "3-end.jpg", "query": "?shot=end&seed=1" }
-]
+[{"caption":"Start screen — title, story intro and controls over the dusk city","name":"1-start.jpg","query":"?shot=start&seed=1337"},{"caption":"Driving a stolen car through Sunset Bay at golden hour, HUD and minimap live","name":"2-drive.jpg","query":"?shot=drive&seed=1337"},{"caption":"Three wanted stars — a Sunset Bay PD cruiser closing in behind you","name":"3-chase.jpg","query":"?shot=chase&seed=1337"},{"caption":"Story mission 1, First Wheels — Slim's dialogue and the garage objective","name":"4-mission.jpg","query":"?shot=mission&seed=1337"}]
