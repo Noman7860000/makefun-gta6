@@ -1,57 +1,95 @@
-# makefun-gta6
+# SUNSET BAY — an open-world crime game
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+![Make GTA 6](https://make.fun/badge/gta6-01.svg)
+![Rank](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/rank.svg)
+![Reward](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/reward.svg)
 
-**SUNSET BAY** — an open-world crime game in the spirit of GTA 6. Cole Vance is back
-in the city that never lets go: steal cars, outrun the Sunset Bay PD, run jobs for
-Slim Vasquez and Rosa Marín, and pull the Sunset Heist. A complete, original,
-open-world browser game — city on foot and by car, traffic and pedestrians,
-car theft, a wanted system and police chases, five story missions, combat, a HUD
-with a live minimap, start/pause/busted/wasted screens, saving, and synthesized
-sound and music. Everything is original: the city, characters, vehicles, names,
-story, art and sound. No Rockstar names, logos, characters, maps or assets.
+**SUNSET BAY** is an open-world crime game built for the
+[Make GTA 6 competition on make.fun](https://make.fun/c/gta6-01).
+Cole Vance is back in Sunset Bay with $250, a borrowed jacket and a
+reputation to rebuild. Slim Vasquez has work at the garage, Rosa Marín has
+bigger plans at the Casino del Sol, and the Sunset Bay PD has eyes
+everywhere. Steal cars, run the jobs, dodge the heat — and take the
+Sunset Heist.
 
-## Run it
+Play it at the [Make GTA 6 competition page](https://make.fun/c/gta6-01)
+once the entry is live.
 
-```sh
-node serve.ts
-```
+## The city
 
-Then open http://localhost:8080 — no build step, no network, everything runs
-offline from the static files under `game/` (three.js r160 is vendored).
+Sunset Bay is a sun-soaked coastal city on a road grid, built in three.js:
+a beach and ocean to the south, a golden-hour sun, palms, street lights and
+traffic lights, and a skyline of lit-window towers. Drive anywhere, on foot
+or behind the wheel.
+
+## What is in the game
+
+- **Open world on foot and by car** — steal any parked car (E to get in and
+  out), drive with WASD, and explore the whole grid.
+- **Traffic and pedestrians** — cars cruise the roads and stop at red
+  lights; pedestrians walk the sidewalks and scatter when trouble starts.
+- **Wanted level, 1–5 stars** — stealing cars, knocking pedestrians down
+  and running red lights draw the Sunset Bay PD. Police cars chase and box
+  you in; foot cops run you down on foot. Get caught standing next to a cop
+  and you are BUSTED.
+- **Respray garage** — roll into Slim's Garage with $150 and the heat is
+  cleared.
+- **Five story missions** with payouts:
+  1. **First Wheels** (+$300) — steal a car and bring it to the garage.
+  2. **The Getaway** (+$600) — pick up Rosa's crew at the Docks and lose
+     a 2-star heat on the way to the Safehouse.
+  3. **Hot Delivery** (+$500) — grab the package at the Docks and reach
+     Bayview Mall in 90 seconds.
+  4. **Repo Man** (+$800) — deal with the casino guards and steal the
+     gold car for the garage.
+  5. **The Sunset Heist** (+$2,500) — crack the vault at Casino del Sol
+     and escape a 3-star alarm to the Safehouse.
+- **Combat** — punch with F; guards and pedestrians go down, and the law
+  notices.
+- **HUD with a live minimap** — cash, health, wanted stars, the clock,
+  speed, the mission objective, a countdown timer and a top-down map with
+  the mission marker, police and the player.
+- **Start screen, pause, and save/load** — your cash, health, missions and
+  position save to the browser and come back with Continue.
+- **Day and night** — press T to cycle the time of day, from noon blue to
+  sunset gold to night, with the street lights coming on.
+- **Synthesised sound** — engine hum, police siren, punches, cash and
+  mission jingles, all generated with WebAudio. No audio files.
 
 ## Controls
 
-- **W A S D** — drive / walk, **Shift** sprint
-- **E** — steal a car / exit the car
-- **F** — punch
-- **P** — pause, **M** — missions, **T** — time of day
-- Drag the mouse to look around
+| Key | Action |
+| --- | --- |
+| WASD | Move / drive |
+| E | Enter or exit a car |
+| F | Punch |
+| P | Pause |
+| M | Mission list |
+| T | Cycle time of day |
+| Shift | Sprint |
+| Mouse drag | Look around |
 
-## Rules of the street
+## How to play
 
-- Stealing a car, punching a pedestrian, running someone over or blowing a red
-  light raises your wanted level (1–5 stars). The PD chases you — get busted
-  and you pay a fine.
-- Cops stop short and only pin you when your car is fully stopped and a cruiser
-  is touching it — or when one is right on top of you on foot.
-- The garage resprays your car for $150 and clears your wanted level.
-- Complete all five jobs: First Wheels ($300), The Getaway ($600),
-  Hot Delivery ($500), Repo Man ($800), The Sunset Heist ($2,500).
+Open `game/index.html` in desktop Chrome, or serve the `game/` folder with
+any static server (`node serve.ts`, then http://localhost:8080). The game
+is plain static files with no build step and no network requests: three.js
+is vendored offline under `game/vendor/three.min.js`.
 
-## Tech
+## Files
 
-- three.js r160 (vendored under `game/vendor/`), plain JavaScript, no build.
-- WebAudio-synthesized SFX and a synthwave loop — no audio files.
-- Seeded procedural city (`?seed=`), `?lowfx=1` for slower machines.
-- Progress saves to localStorage; Continue on the title screen restores it.
+- `game/index.html` — the page, HUD and menus
+- `game/src/util.js` — seeded random numbers and small helpers
+- `game/src/world.js` — the city, sky, lights and traffic lights
+- `game/src/actors.js` — cars, pedestrians, traffic, police
+- `game/src/audio.js` — synthesised WebAudio sound
+- `game/src/missions.js` — the five story missions
+- `game/src/game.js` — the game itself: driving, combat, wanted, HUD
+- `game/src/main.js` — boot and the debug API
+- `screenshots/` — four screenshots taken from the game
+- `main.ts` — hands the entry in: copies `game/` and `screenshots/` and
+  writes `dossier.json`
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-Built by an AI agent for make.fun's "Make GTA 6" bounty, $1,666 in USDC.
-
-[make.fun](https://make.fun/bounty/gta6-01?ref=278ah55q)
+MIT — see `LICENSE`.
