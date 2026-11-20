@@ -1,398 +1,452 @@
-// SUNSET BAY — actors.js
-// Everything that moves through the city besides the player: the car and
-// pedestrian meshes, the traffic cars that cruise the road grid, the
-// pedestrians on the sidewalks, and the police cars and foot cops that
-// respond to the wanted level. Behaviour functions take the game object so
-// this file never imports the game itself.
-(function () {
-  'use strict';
-  var U = window.SB.util;
-  var W = window.SB.world;
+// SUNSET BAY actors: the player on foot, cars (parked, traffic, police),
+// pedestrians, casino guards and the m2 crew. Meshes are simple grouped
+// boxes so the game stays fast under software rendering; the driving,
+// chasing and boarding brains live here too.
+import { GRID, clamp, angleDiff, dist, makeRng, mergeGeos } from './util.js';
 
-  var CAR_COLORS = [0xc23a2e, 0x2e6fc2, 0xd8c93a, 0x3aa655, 0x8a8f96, 0x22242a, 0xe8e2d4, 0x7a4a9c, 0xd87a2e];
-  var SHIRT_COLORS = [0xd84a4a, 0x4a7ad8, 0x4ad87a, 0xd8c94a, 0xe8e8e8, 0x9c4ad8, 0x4ad8d8, 0xd88a4a];
+const THREE = window.THREE;
 
-  function makeCarMesh(color, isPolice, isGold) {
-    var g = new THREE.Group();
-    var bodyMat = new THREE.MeshLambertMaterial({ color: color });
-    var body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.62, 4.4), bodyMat);
-    body.position.y = 0.55;
-    body.castShadow = true;
-    g.add(body);
-    var cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(1.85, 0.55, 2.1),
-      new THREE.MeshLambertMaterial({ color: 0x1c2733 })
-    );
-    cabin.position.set(0, 1.08, -0.25);
-    cabin.castShadow = true;
-    g.add(cabin);
-    // Wheels.
-    var wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10);
-    var wheelMat = new THREE.MeshLambertMaterial({ color: 0x14161a });
-    var wheelPos = [[-1.0, 1.45], [1.0, 1.45], [-1.0, -1.45], [1.0, -1.45]];
-    for (var i = 0; i < 4; i++) {
-      var w = new THREE.Mesh(wheelGeo, wheelMat);
-      w.rotation.z = Math.PI / 2;
-      w.position.set(wheelPos[i][0], 0.38, wheelPos[i][1]);
-      g.add(w);
-    }
-    // Headlights and tail lights.
-    var headMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
-    var tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a22 });
-    var hl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.1), headMat);
-    hl.position.set(-0.65, 0.6, 2.21);
+const CAR_COLORS = [
+  0xc23a3a, 0x3a6ac2, 0xd8b13a, 0x3a9a5a, 0x8a5ac2, 0xd8d8d8,
+  0x2a2a2e, 0xc27a3a, 0x5ab8c2, 0x9a3a6a, 0x4a4a8a, 0xb8b8a8,
+];
+const SHIRT_COLORS = [
+  0xe8e8e8, 0x4a90d8, 0xd84a6a, 0x4ad88a, 0xd8a03a, 0x8a5ad8,
+  0x3a3a3a, 0xc2c23a, 0x5ad8c2, 0xd88a4a,
+];
+
+function makeCarMesh(color, police) {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.7, 4.4), bodyMat);
+  body.position.y = 0.55;
+  body.castShadow = true;
+  g.add(body);
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 0.6, 2.2),
+    new THREE.MeshLambertMaterial({ color: 0x1c2733 }),
+  );
+  cabin.position.set(0, 1.15, -0.2);
+  cabin.castShadow = true;
+  g.add(cabin);
+  const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10);
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x141414 });
+  const wheels = [];
+  for (const [wx, wz] of [[-0.85, 1.4], [0.85, 1.4], [-0.85, -1.4], [0.85, -1.4]]) {
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.rotation.z = Math.PI / 2;
+    w.position.set(wx, 0.38, wz);
+    g.add(w);
+    wheels.push(w);
+  }
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
+  for (const s of [-0.6, 0.6]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.18, 0.1), lightMat);
+    hl.position.set(s, 0.6, 2.22);
     g.add(hl);
-    var hr = hl.clone();
-    hr.position.x = 0.65;
-    g.add(hr);
-    var tl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.1), tailMat);
-    tl.position.set(-0.65, 0.6, -2.21);
-    g.add(tl);
-    var tr = tl.clone();
-    tr.position.x = 0.65;
-    g.add(tr);
-    if (isPolice) {
-      var bar = new THREE.Mesh(
-        new THREE.BoxGeometry(1.3, 0.22, 0.5),
-        new THREE.MeshLambertMaterial({ color: 0x11131a })
-      );
-      bar.position.set(0, 1.45, -0.25);
-      g.add(bar);
-      var red = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.24, 0.52), new THREE.MeshBasicMaterial({ color: 0xff2222 }));
-      red.position.set(-0.32, 1.46, -0.25);
-      g.add(red);
-      var blue = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.24, 0.52), new THREE.MeshBasicMaterial({ color: 0x2244ff }));
-      blue.position.set(0.32, 1.46, -0.25);
-      g.add(blue);
-      g.userData.lightBar = { red: red, blue: blue };
-    }
-    if (isGold) {
-      var stripe = new THREE.Mesh(
-        new THREE.BoxGeometry(2.12, 0.1, 4.42),
-        new THREE.MeshBasicMaterial({ color: 0xffe97a })
-      );
-      stripe.position.y = 0.88;
-      g.add(stripe);
-    }
-    return g;
   }
-
-  function makePersonMesh(shirtColor, isCop) {
-    var g = new THREE.Group();
-    var shirt = new THREE.MeshLambertMaterial({ color: shirtColor });
-    var body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.95, 0.36), shirt);
-    body.position.y = 1.0;
-    body.castShadow = true;
-    g.add(body);
-    var legs = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, 0.55, 0.32),
-      new THREE.MeshLambertMaterial({ color: isCop ? 0x1a2a4a : 0x2e3440 })
+  if (police) {
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 0.18, 0.4),
+      new THREE.MeshBasicMaterial({ color: 0xff2222 }),
     );
-    legs.position.y = 0.28;
-    g.add(legs);
-    var head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.26, 10, 8),
-      new THREE.MeshLambertMaterial({ color: 0xc98d64 })
+    bar.position.set(0, 1.55, 0.1);
+    g.add(bar);
+    g.userData.lightBar = bar;
+  }
+  g.userData.wheels = wheels;
+  return g;
+}
+
+// Fast version: the whole car as ONE vertex-coloured mesh (one draw call).
+// Used in lowfx mode; the detailed multi-mesh version above is for the
+// full-quality screenshots.
+function makeCarMeshMerged(color, police) {
+  const parts = [];
+  const bodyCol = new THREE.Color(color);
+  const cabinCol = new THREE.Color(0x1c2733);
+  const wheelCol = new THREE.Color(0x141414);
+  const lightCol = new THREE.Color(0xfff2b0);
+  const at = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
+  parts.push({ geo: new THREE.BoxGeometry(1.9, 0.7, 4.4), matrix: at(0, 0.55, 0), color: bodyCol });
+  parts.push({ geo: new THREE.BoxGeometry(1.7, 0.6, 2.2), matrix: at(0, 1.15, -0.2), color: cabinCol });
+  for (const [wx, wz] of [[-0.85, 1.4], [0.85, 1.4], [-0.85, -1.4], [0.85, -1.4]]) {
+    parts.push({
+      geo: new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10),
+      matrix: new THREE.Matrix4().makeRotationZ(Math.PI / 2).setPosition(wx, 0.38, wz),
+      color: wheelCol,
+    });
+  }
+  for (const s of [-0.6, 0.6]) {
+    parts.push({ geo: new THREE.BoxGeometry(0.35, 0.18, 0.1), matrix: at(s, 0.6, 2.22), color: lightCol });
+  }
+  const mesh = new THREE.Mesh(
+    mergeGeos(parts),
+    new THREE.MeshLambertMaterial({ vertexColors: true }),
+  );
+  mesh.castShadow = true;
+  if (police) {
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 0.18, 0.4),
+      new THREE.MeshBasicMaterial({ color: 0xff2222 }),
     );
-    head.position.y = 1.72;
-    head.castShadow = true;
-    g.add(head);
-    if (isCop) {
-      var hat = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.3, 0.14, 10),
-        new THREE.MeshLambertMaterial({ color: 0x14203a })
-      );
-      hat.position.y = 1.94;
-      g.add(hat);
-    } else {
-      var hair = new THREE.Mesh(
-        new THREE.SphereGeometry(0.27, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-        new THREE.MeshLambertMaterial({ color: 0x241a12 })
-      );
-      hair.position.y = 1.76;
-      g.add(hair);
+    bar.position.set(0, 1.55, 0.1);
+    mesh.add(bar);
+    mesh.userData.lightBar = bar;
+  }
+  return mesh;
+}
+
+function makePersonMesh(shirt, skin = 0xc89878) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.62, 0.85, 0.36),
+    new THREE.MeshLambertMaterial({ color: shirt }),
+  );
+  body.position.y = 1.05;
+  body.castShadow = true;
+  g.add(body);
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.24, 10, 8),
+    new THREE.MeshLambertMaterial({ color: skin }),
+  );
+  head.position.y = 1.68;
+  head.castShadow = true;
+  g.add(head);
+  const legMat = new THREE.MeshLambertMaterial({ color: 0x2a2a3a });
+  const legs = [];
+  for (const s of [-0.16, 0.16]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.6, 0.24), legMat);
+    leg.position.set(s, 0.32, 0);
+    g.add(leg);
+    legs.push(leg);
+  }
+  const armMat = new THREE.MeshLambertMaterial({ color: shirt });
+  const arms = [];
+  for (const s of [-0.4, 0.4]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.18), armMat);
+    arm.position.set(s, 1.05, 0);
+    g.add(arm);
+    arms.push(arm);
+  }
+  g.userData.legs = legs;
+  g.userData.arms = arms;
+  return g;
+}
+
+// Fast version: the whole person as ONE vertex-coloured mesh (one draw
+// call). Used in lowfx mode; the detailed version above is for the
+// full-quality screenshots. (No swinging limbs here — the walk cycle is a
+// lowfx-only sacrifice; the person still moves and falls the same way.)
+function makePersonMeshMerged(shirt, skin = 0xc89878) {
+  const parts = [];
+  const shirtCol = new THREE.Color(shirt);
+  const skinCol = new THREE.Color(skin);
+  const legCol = new THREE.Color(0x2a2a3a);
+  const at = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
+  parts.push({ geo: new THREE.BoxGeometry(0.62, 0.85, 0.36), matrix: at(0, 1.05, 0), color: shirtCol });
+  parts.push({ geo: new THREE.SphereGeometry(0.24, 10, 8), matrix: at(0, 1.68, 0), color: skinCol });
+  for (const s of [-0.16, 0.16]) {
+    parts.push({ geo: new THREE.BoxGeometry(0.22, 0.6, 0.24), matrix: at(s, 0.32, 0), color: legCol });
+  }
+  for (const s of [-0.4, 0.4]) {
+    parts.push({ geo: new THREE.BoxGeometry(0.16, 0.62, 0.18), matrix: at(s, 1.05, 0), color: shirtCol });
+  }
+  const mesh = new THREE.Mesh(
+    mergeGeos(parts),
+    new THREE.MeshLambertMaterial({ vertexColors: true }),
+  );
+  mesh.castShadow = true;
+  return mesh;
+}
+
+// ---------------------------------------------------------------- cars ----
+export class Car {
+  constructor(scene, x, z, heading, kind, color, police = false, merged = false) {
+    this.x = x; this.z = z; this.heading = heading;
+    this.speed = 0; this.hp = 100; this.kind = kind; // parked|traffic|police|gold
+    this.hitCooldown = 0; // seconds of game time before another crash can hurt it
+    this.color = color;
+    this.dead = false;
+    this.mesh = merged ? makeCarMeshMerged(color, police) : makeCarMesh(color, police);
+    this.mesh.position.set(x, 0, z);
+    this.mesh.rotation.y = heading;
+    scene.add(this.mesh);
+    // traffic brain
+    this.axis = 'x'; this.dir = 1; this.lane = 2; this.road = 0;
+    this.targetSpeed = 0;
+    this.stuckTimer = 0;
+    this.lastX = x; this.lastZ = z;
+  }
+
+  get fx() { return Math.sin(this.heading); }
+  get fz() { return Math.cos(this.heading); }
+
+  syncMesh() {
+    this.mesh.position.set(this.x, 0, this.z);
+    this.mesh.rotation.y = this.heading;
+    const wheels = this.mesh.userData.wheels;
+    if (wheels) {
+      const spin = this.speed * 0.06;
+      for (const w of wheels) w.rotation.x += spin;
     }
-    // Simple swinging arms, animated by the update loop.
-    var armGeo = new THREE.BoxGeometry(0.14, 0.7, 0.14);
-    var armMat = new THREE.MeshLambertMaterial({ color: shirtColor });
-    var armL = new THREE.Mesh(armGeo, armMat);
-    armL.position.set(-0.4, 1.0, 0);
-    g.add(armL);
-    var armR = new THREE.Mesh(armGeo, armMat);
-    armR.position.set(0.4, 1.0, 0);
-    g.add(armR);
-    g.userData.armL = armL;
-    g.userData.armR = armR;
-    return g;
   }
 
-  function syncMesh(obj) {
-    if (!obj.mesh) return;
-    obj.mesh.position.set(obj.x, obj.y || 0, obj.z);
-    obj.mesh.rotation.y = obj.heading || 0;
+  // Drive the car toward a heading at a target speed (arcade handling:
+  // steering needs motion, braking is strong, top speed is capped).
+  driveToward(dt, desiredHeading, targetSpeed, accel = 10) {
+    const dh = angleDiff(this.heading, desiredHeading);
+    const steer = clamp(dh * 1.6, -1, 1);
+    const moving = Math.abs(this.speed) > 0.5;
+    if (moving) this.heading += steer * 1.7 * dt * clamp(Math.abs(this.speed) / 6, 0.25, 1) * Math.sign(this.speed);
+    if (this.speed < targetSpeed) this.speed = Math.min(targetSpeed, this.speed + accel * dt);
+    else if (this.speed > targetSpeed) this.speed = Math.max(targetSpeed, this.speed - accel * 1.6 * dt);
+    this.x += Math.sin(this.heading) * this.speed * dt;
+    this.z += Math.cos(this.heading) * this.speed * dt;
   }
 
-  // ---- Traffic -------------------------------------------------------------
-  // A traffic car cruises one road line at a time and turns at junctions.
-  // It stops for red lights and crawls around cars ahead of it.
-  function makeTrafficCar(game, rng) {
-    var alongNS = rng.chance(0.5);
-    var coord = rng.pick(W.ROAD_COORDS);
-    var along = rng.range(-200, 200);
-    var car = {
-      kind: 'traffic',
-      x: alongNS ? coord : along,
-      z: alongNS ? along : coord,
-      heading: 0,
-      speed: 0,
-      hp: 100,
-      dead: false,
-      color: rng.pick(CAR_COLORS),
-      cruise: rng.range(8, 12),
-      stopTimer: 0,
-      bumpCooldown: 0,
-    };
-    // Face along the road.
-    if (alongNS) car.heading = rng.chance(0.5) ? 0 : Math.PI;
-    else car.heading = rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2;
-    car.mesh = makeCarMesh(car.color, false, false);
-    game.scene.add(car.mesh);
-    syncMesh(car);
-    return car;
-  }
-
-  function updateTrafficCar(game, car, dt) {
-    if (car.dead) return;
-    var fx = Math.sin(car.heading), fz = Math.cos(car.heading);
-    // Junction ahead? If the light is red or yellow, stop before it.
-    var aheadX = car.x + fx * 13, aheadZ = car.z + fz * 13;
-    var jx = W.nearestRoadCoord(aheadX), jz = W.nearestRoadCoord(aheadZ);
-    var nearJunction = Math.abs(aheadX - jx) < 7 && Math.abs(aheadZ - jz) < 7;
-    var light = game.world.lightPhase();
-    var wantStop = false;
-    if (nearJunction && light !== 'green') {
-      // Only stop if the junction is genuinely in front of us.
-      var jdx = jx - car.x, jdz = jz - car.z;
-      var fwd = jdx * fx + jdz * fz;
-      if (fwd > 2 && fwd < 16) wantStop = true;
+  updateTraffic(dt, world, rng, others) {
+    // Pick a road to follow if none yet.
+    if (this.targetSpeed === 0 && this.speed === 0) {
+      const alongX = rng.chance(0.5);
+      if (alongX) { this.axis = 'x'; this.road = this.z; this.dir = rng.chance(0.5) ? 1 : -1; }
+      else { this.axis = 'z'; this.road = this.x; this.dir = rng.chance(0.5) ? 1 : -1; }
+      this.lane = this.dir > 0 ? 2 : -2;
+      this.targetSpeed = rng.range(8, 12);
     }
-    // A car ahead on the same road: slow down, never rear-end it.
-    for (var i = 0; i < game.cars.length; i++) {
-      var o = game.cars[i];
-      if (o === car || o.dead) continue;
-      var dx = o.x - car.x, dz = o.z - car.z;
-      var fwd2 = dx * fx + dz * fz;
-      var side = dx * fz - dz * fx;
-      if (fwd2 > 0 && fwd2 < 11 && Math.abs(side) < 3.2) { wantStop = true; break; }
+    // Where am I heading, and is a junction coming up?
+    const along = this.axis === 'x' ? this.x : this.z;
+    const cross = this.axis === 'x' ? this.z : this.x;
+    let nextJunction = null;
+    for (const c of GRID) {
+      const d = (c - along) * this.dir;
+      if (d > 2 && d < 60) { nextJunction = { at: c, dist: d }; break; }
     }
-    if (wantStop) {
-      car.speed = Math.max(0, car.speed - 22 * dt);
-    } else {
-      car.speed = Math.min(car.cruise, car.speed + 7 * dt);
+    // Traffic light: stop at red before the junction.
+    let want = this.targetSpeed;
+    if (nextJunction && nextJunction.dist < 16) {
+      const st = world.lightStateAt(this.x, this.z, this.axis === 'x');
+      if (st !== 'green') want = 0;
     }
-    car.x += fx * car.speed * dt;
-    car.z += fz * car.speed * dt;
-    // At a junction, sometimes turn onto the crossing road.
-    var atJx = Math.abs(car.x - W.nearestRoadCoord(car.x)) < 1.6;
-    var atJz = Math.abs(car.z - W.nearestRoadCoord(car.z)) < 1.6;
-    if (atJx && atJz && game.rng.chance(0.25)) {
-      var turn = game.rng.pick([-Math.PI / 2, Math.PI / 2]);
-      car.heading += turn;
-      car.x = W.nearestRoadCoord(car.x);
-      car.z = W.nearestRoadCoord(car.z);
+    // Car ahead: slow down instead of rear-ending it.
+    for (const o of others) {
+      if (o === this || o.dead) continue;
+      const dx = o.x - this.x;
+      const dz = o.z - this.z;
+      const fwd = dx * this.fx + dz * this.fz;
+      const side = Math.abs(dx * this.fz - dz * this.fx);
+      if (fwd > 0 && fwd < 12 && side < 3.5) { want = Math.min(want, 2); break; }
     }
-    // Wrap around the city edge so traffic never runs out.
-    if (car.x > 226) car.x = -226;
-    if (car.x < -226) car.x = 226;
-    if (car.z > 226) car.z = -226;
-    if (car.z < -226) car.z = 226;
-    syncMesh(car);
-  }
-
-  // ---- Pedestrians ---------------------------------------------------------
-  function makePed(game, rng, x, z) {
-    var ped = {
-      x: x !== undefined ? x : rng.range(-200, 200),
-      z: z !== undefined ? z : rng.range(-200, 200),
-      heading: rng.range(0, Math.PI * 2),
-      hp: 100,
-      state: 'walk',
-      dead: false,
-      speed: rng.range(1.1, 1.9),
-      target: null,
-      downTimer: 0,
-      walkPhase: rng.range(0, Math.PI * 2),
-    };
-    ped.mesh = makePersonMesh(rng.pick(SHIRT_COLORS), false);
-    game.scene.add(ped.mesh);
-    pickPedTarget(game, ped);
-    syncMesh(ped);
-    return ped;
-  }
-
-  function pickPedTarget(game, ped) {
-    // Walk along the sidewalks: a target on a road line, offset to the side.
-    var c = game.rng.pick(W.ROAD_COORDS);
-    var off = game.rng.pick([-11, 11]);
-    if (game.rng.chance(0.5)) ped.target = { x: c + off, z: game.rng.range(-200, 200) };
-    else ped.target = { x: game.rng.range(-200, 200), z: c + off };
-  }
-
-  function updatePed(game, ped, dt) {
-    if (ped.state === 'down') {
-      ped.downTimer += dt;
-      if (ped.downTimer > 25) {
-        // Get back up after a while, a little the worse for wear.
-        ped.state = 'walk';
-        ped.hp = 60;
-        ped.downTimer = 0;
-        ped.mesh.rotation.x = 0;
-        ped.mesh.position.y = 0;
+    // Maybe turn at the junction.
+    if (nextJunction && nextJunction.dist < 3 && rng.chance(0.4)) {
+      const crossCoord = nextJunction.at;
+      if (this.axis === 'x') {
+        this.axis = 'z'; this.road = crossCoord; this.dir = rng.chance(0.5) ? 1 : -1;
+      } else {
+        this.axis = 'x'; this.road = crossCoord; this.dir = rng.chance(0.5) ? 1 : -1;
       }
+      this.lane = this.dir > 0 ? 2 : -2;
+    }
+    // Steer back onto the lane centre.
+    const lanePos = this.axis === 'x' ? this.z : this.x;
+    const laneTarget = this.road + this.lane;
+    const laneErr = laneTarget - lanePos;
+    const baseHeading = this.axis === 'x'
+      ? (this.dir > 0 ? Math.PI / 2 : -Math.PI / 2)
+      : (this.dir > 0 ? 0 : Math.PI);
+    const desired = baseHeading + clamp(laneErr * 0.06, -0.5, 0.5);
+    this.driveToward(dt, desired, want, 7);
+    // If wedged (not moving for a while), reverse out and re-aim.
+    if (Math.abs(this.speed) < 0.5 && want > 0) this.stuckTimer += dt;
+    else this.stuckTimer = 0;
+    if (this.stuckTimer > 3) {
+      this.speed = -4;
+      this.stuckTimer = -2; // grace period while reversing
+    }
+    this.syncMesh();
+  }
+
+  updatePolice(dt, world, tx, tz, stopDist) {
+    const d = dist(this.x, this.z, tx, tz);
+    const desired = Math.atan2(tx - this.x, tz - this.z);
+    let want = 0;
+    // Ease off as we close in: charging at 20 m/s to 10 m out and only
+    // then braking means overshooting into the suspect's car every time.
+    // A pursuit that slows early still catches a slow car and barely
+    // nudges a fast one.
+    if (d > stopDist + 15) want = 20;
+    else if (d > stopDist + 5) want = 10;
+    else if (d > stopDist) want = 5;
+    else if (d < stopDist - 2.5) want = -4;
+    this.driveToward(dt, desired, want, 12);
+    // flash the light bar
+    if (this.mesh.userData.lightBar) {
+      const t = Math.floor(performance.now() / 280) % 2;
+      this.mesh.userData.lightBar.material.color.set(t === 0 ? 0xff2222 : 0x2244ff);
+    }
+    // stuck against a wall: reverse briefly
+    const moved = dist(this.x, this.z, this.lastX, this.lastZ);
+    if (moved < 0.05 && want > 0) this.stuckTimer += dt;
+    else this.stuckTimer = 0;
+    if (this.stuckTimer > 2.5) {
+      this.speed = -5;
+      this.stuckTimer = -1.5;
+    }
+    this.lastX = this.x; this.lastZ = this.z;
+    this.syncMesh();
+  }
+
+  dispose(scene) {
+    scene.remove(this.mesh);
+  }
+}
+
+// -------------------------------------------------------------- people ----
+export class Person {
+  constructor(scene, x, z, shirt, role = 'ped', merged = false) {
+    this.x = x; this.z = z;
+    this.heading = Math.random() * Math.PI * 2;
+    this.hp = 100;
+    this.role = role; // ped | guard | crew
+    this.state = 'walk'; // walk | down | flee | wait | board
+    this.speed = 0;
+    this.dead = false;
+    this.downTimer = 0;
+    this.walkPhase = Math.random() * 6;
+    this.target = null; // {x, z} waypoint
+    this.attackTimer = 0;
+    this.mesh = merged ? makePersonMeshMerged(shirt) : makePersonMesh(shirt);
+    this.mesh.position.set(x, 0, z);
+    scene.add(this.mesh);
+  }
+
+  syncMesh(dt) {
+    this.mesh.position.set(this.x, 0, this.z);
+    this.mesh.rotation.y = this.heading;
+    const swing = this.speed > 0.5 ? Math.sin(this.walkPhase) * 0.5 : 0;
+    const legs = this.mesh.userData.legs;
+    const arms = this.mesh.userData.arms;
+    if (legs) {
+      legs[0].rotation.x = swing;
+      legs[1].rotation.x = -swing;
+    }
+    if (arms) {
+      arms[0].rotation.x = -swing * 0.7;
+      arms[1].rotation.x = swing * 0.7;
+    }
+    if (this.state === 'down') {
+      this.mesh.rotation.x = Math.PI / 2 - 0.1;
+      this.mesh.position.y = 0.25;
+    } else {
+      this.mesh.rotation.x = 0;
+      this.mesh.position.y = 0;
+    }
+  }
+
+  walkToward(dt, tx, tz, speed) {
+    const d = dist(this.x, this.z, tx, tz);
+    if (d < 0.6) { this.speed = 0; return true; }
+    this.heading = Math.atan2(tx - this.x, tz - this.z);
+    this.speed = speed;
+    this.walkPhase += dt * speed * 1.6;
+    this.x += Math.sin(this.heading) * speed * dt;
+    this.z += Math.cos(this.heading) * speed * dt;
+    return false;
+  }
+
+  updatePed(dt, world, rng, danger) {
+    if (this.state === 'down') {
+      this.downTimer -= dt;
+      if (this.downTimer <= 0) {
+        this.state = 'walk';
+        this.hp = 100;
+        this.speed = 0;
+      }
+      this.syncMesh(dt);
       return;
     }
-    var t = ped.target;
-    if (!t) { pickPedTarget(game, ped); return; }
-    var dx = t.x - ped.x, dz = t.z - ped.z;
-    var d = Math.sqrt(dx * dx + dz * dz);
-    if (d < 2) { pickPedTarget(game, ped); return; }
-    var want = Math.atan2(dx, dz);
-    ped.heading = U.turnToward(ped.heading, want, 3.2 * dt);
-    var sp = ped.state === 'flee' ? 4.2 : ped.speed;
-    ped.x += Math.sin(ped.heading) * sp * dt;
-    ped.z += Math.cos(ped.heading) * sp * dt;
-    ped.walkPhase += dt * (ped.state === 'flee' ? 11 : 6);
-    var swing = Math.sin(ped.walkPhase) * 0.55;
-    ped.mesh.userData.armL.rotation.x = swing;
-    ped.mesh.userData.armR.rotation.x = -swing;
-    // Fleeing peds calm down once they are far from the player.
-    if (ped.state === 'flee' && U.dist2d(ped.x, ped.z, game.player.x, game.player.z) > 40) {
-      ped.state = 'walk';
+    // Flee from nearby danger (a speeding car or a fight).
+    if (danger && dist(this.x, this.z, danger.x, danger.z) < 9) {
+      this.state = 'flee';
+      const away = Math.atan2(this.x - danger.x, this.z - danger.z);
+      this.heading = away;
+      this.speed = 5;
+      this.walkPhase += dt * 8;
+      this.x += Math.sin(this.heading) * 5 * dt;
+      this.z += Math.cos(this.heading) * 5 * dt;
+      world.resolveCircle(this, 0.8);
+      this.syncMesh(dt);
+      return;
     }
-    syncMesh(ped);
+    this.state = 'walk';
+    if (!this.target || dist(this.x, this.z, this.target.x, this.target.z) < 2) {
+      // pick a new sidewalk waypoint on the grid
+      const c = rng.pick(GRID);
+      if (rng.chance(0.5)) this.target = { x: rng.range(-200, 200), z: c + (rng.chance(0.5) ? 7.5 : -7.5) };
+      else this.target = { x: c + (rng.chance(0.5) ? 7.5 : -7.5), z: rng.range(-200, 200) };
+    }
+    this.walkToward(dt, this.target.x, this.target.z, 1.6);
+    world.resolveCircle(this, 0.8);
+    this.syncMesh(dt);
   }
 
-  // ---- Police --------------------------------------------------------------
-  function makePoliceCar(game, rng, nearX, nearZ) {
-    // Spawn on a road 40-60 m from the player, facing roughly toward them.
-    var ang = rng.range(0, Math.PI * 2);
-    var d = rng.range(40, 58);
-    var p = W.snapToRoad(nearX + Math.cos(ang) * d, nearZ + Math.sin(ang) * d);
-    var car = {
-      kind: 'police',
-      x: p.x,
-      z: p.z,
-      heading: Math.atan2(nearX - p.x, nearZ - p.z),
-      speed: 0,
-      hp: 100,
-      dead: false,
-      stuckTimer: 0,
-      flashPhase: rng.range(0, 1),
-    };
-    car.mesh = makeCarMesh(0x1a1d24, true, false);
-    game.scene.add(car.mesh);
-    syncMesh(car);
-    return car;
-  }
-
-  function updatePoliceCar(game, car, dt) {
-    if (car.dead) return;
-    var tx = game.playerCar ? game.playerCar.x : game.player.x;
-    var tz = game.playerCar ? game.playerCar.z : game.player.z;
-    var dx = tx - car.x, dz = tz - car.z;
-    var dist = Math.sqrt(dx * dx + dz * dz);
-    var wantHeading = Math.atan2(dx, dz);
-    car.heading = U.turnToward(car.heading, wantHeading, 2.6 * dt);
-    // Chase hard, but stop a respectful distance short of the player: the
-    // police box the player in rather than parking on top of them. Speed
-    // is staged by distance so a car at full tilt cannot overshoot
-    // through the standoff ring, and a car that ends up too close backs
-    // off to it.
-    var targetSpeed;
-    if (dist > 25) targetSpeed = 26;
-    else if (dist > 12) targetSpeed = 12;
-    else if (dist > 9) targetSpeed = 0;
-    else targetSpeed = -6;
-    if (car.speed < targetSpeed) car.speed = Math.min(targetSpeed, car.speed + 30 * dt);
-    else car.speed = Math.max(targetSpeed, car.speed - 30 * dt);
-    car.x += Math.sin(car.heading) * car.speed * dt;
-    car.z += Math.cos(car.heading) * car.speed * dt;
-    // Unstick: if we have barely moved while far from the player, we are
-    // wedged on a building — reappear on a road near the player.
-    if (dist > 14 && Math.abs(car.speed) < 1.5) {
-      car.stuckTimer += dt;
-      if (car.stuckTimer > 3) {
-        var p = W.snapToRoad(game.player.x + game.rng.range(-45, 45), game.player.z + game.rng.range(-45, 45));
-        car.x = p.x; car.z = p.z;
-        car.heading = Math.atan2(tx - p.x, tz - p.z);
-        car.stuckTimer = 0;
+  updateGuard(dt, world, px, pz, playerAlive) {
+    if (this.state === 'down') {
+      this.downTimer -= dt;
+      if (this.downTimer <= 0) { this.state = 'walk'; this.hp = 60; }
+      this.syncMesh(dt);
+      return 0;
+    }
+    const d = dist(this.x, this.z, px, pz);
+    let dealt = 0;
+    if (playerAlive && d < 42) {
+      this.walkToward(dt, px, pz, 4.2);
+      if (d < 2.3) {
+        this.attackTimer -= dt;
+        if (this.attackTimer <= 0) {
+          this.attackTimer = 1.3;
+          dealt = 6; // one guard punch
+        }
       }
-    } else car.stuckTimer = 0;
-    game.world.resolveBuildings(car, 2.1);
-    car.x = U.clamp(car.x, -W.BOUND, W.BOUND);
-    car.z = U.clamp(car.z, -W.BOUND, W.BOUND);
-    // Flash the light bar.
-    car.flashPhase += dt * 6;
-    var on = Math.sin(car.flashPhase * Math.PI) > 0;
-    if (car.mesh.userData.lightBar) {
-      car.mesh.userData.lightBar.red.material.color.setHex(on ? 0xff2222 : 0x551111);
-      car.mesh.userData.lightBar.blue.material.color.setHex(on ? 0x2244ff : 0x111155);
+    } else {
+      this.speed = 0;
     }
-    syncMesh(car);
+    world.resolveCircle(this, 0.8);
+    this.syncMesh(dt);
+    return dealt;
   }
 
-  function makeFootCop(game, rng, nearX, nearZ) {
-    var ang = rng.range(0, Math.PI * 2);
-    var cop = {
-      x: nearX + Math.cos(ang) * 26,
-      z: nearZ + Math.sin(ang) * 26,
-      heading: 0,
-      hp: 100,
-      state: 'chase',
-      dead: false,
-      // Deliberately slower than the player's sprint (9 m/s) and slower
-      // than a player sliding along a wall (~6 m/s): foot cops can catch
-      // a player who stops or gets cornered, never one who keeps running.
-      speed: 5.5,
-      walkPhase: 0,
-    };
-    cop.mesh = makePersonMesh(0x1a2a4a, true);
-    game.scene.add(cop.mesh);
-    syncMesh(cop);
-    return cop;
-  }
-
-  function updateFootCop(game, cop, dt) {
-    if (cop.dead) return;
-    var dx = game.player.x - cop.x, dz = game.player.z - cop.z;
-    var d = Math.sqrt(dx * dx + dz * dz);
-    if (d > 1.5) {
-      var want = Math.atan2(dx, dz);
-      cop.heading = U.turnToward(cop.heading, want, 4 * dt);
-      cop.x += Math.sin(cop.heading) * cop.speed * dt;
-      cop.z += Math.cos(cop.heading) * cop.speed * dt;
-      cop.walkPhase += dt * 10;
-      var swing = Math.sin(cop.walkPhase) * 0.6;
-      cop.mesh.userData.armL.rotation.x = swing;
-      cop.mesh.userData.armR.rotation.x = -swing;
+  updateCrew(dt, world, car) {
+    if (this.state === 'board') return;
+    // They are waiting for the car — hurry over from anywhere in the
+    // dock yard, not just when it stops right next to them, or the
+    // pickup stalls while the police close in.
+    if (car && dist(this.x, this.z, car.x, car.z) < 30) {
+      const arrived = this.walkToward(dt, car.x, car.z, 7);
+      if (arrived || dist(this.x, this.z, car.x, car.z) < 4) {
+        this.state = 'board';
+        this.speed = 0;
+        this.mesh.visible = false;
+      }
     }
-    game.world.resolveBuildings(cop, 0.6);
-    syncMesh(cop);
+    world.resolveCircle(this, 0.8);
+    this.syncMesh(dt);
   }
 
-  window.SB.actors = {
-    CAR_COLORS: CAR_COLORS,
-    makeCarMesh: makeCarMesh,
-    makePersonMesh: makePersonMesh,
-    syncMesh: syncMesh,
-    makeTrafficCar: makeTrafficCar,
-    updateTrafficCar: updateTrafficCar,
-    makePed: makePed,
-    pickPedTarget: pickPedTarget,
-    updatePed: updatePed,
-    makePoliceCar: makePoliceCar,
-    updatePoliceCar: updatePoliceCar,
-    makeFootCop: makeFootCop,
-    updateFootCop: updateFootCop,
-  };
-})();
+  knockDown() {
+    this.state = 'down';
+    this.downTimer = 30;
+    this.speed = 0;
+  }
+
+  dispose(scene) {
+    scene.remove(this.mesh);
+  }
+}
+
+export function randomCarColor(rng) {
+  return rng.pick(CAR_COLORS);
+}
+export function randomShirt(rng) {
+  return rng.pick(SHIRT_COLORS);
+}

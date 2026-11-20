@@ -1,95 +1,72 @@
-# SUNSET BAY — an open-world crime game
+# SUNSET BAY
 
-![Make GTA 6](https://make.fun/badge/gta6-01.svg)
-![Rank](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/rank.svg)
-![Reward](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/reward.svg)
+[![SUNSET BAY on make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/competitions/gta6-01)
+[![Rank](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/rank.svg)](https://make.fun/competitions/gta6-01)
+[![Reward](https://make.fun/badge/gta6-01/Noman7860000/makefun-gta6/reward.svg)](https://make.fun/competitions/gta6-01)
 
-**SUNSET BAY** is an open-world crime game built for the
-[Make GTA 6 competition on make.fun](https://make.fun/c/gta6-01).
-Cole Vance is back in Sunset Bay with $250, a borrowed jacket and a
-reputation to rebuild. Slim Vasquez has work at the garage, Rosa Marín has
-bigger plans at the Casino del Sol, and the Sunset Bay PD has eyes
-everywhere. Steal cars, run the jobs, dodge the heat — and take the
-Sunset Heist.
+An open-world crime game built for the [GTA 6 bounty (gta6-01)](https://make.fun/competitions/gta6-01) on [make.fun](https://make.fun).
 
-Play it at the [Make GTA 6 competition page](https://make.fun/c/gta6-01)
-once the entry is live.
+## The story
+
+Cole Vance came back to Sunset Bay with $250 in his pocket and a debt to pay.
+Fixers Slim Vasquez and Rosa Marín have five jobs for him — steal a car, run the
+crew, make a hot delivery, repo a gold car from the Palm Casino, and finally crack
+the vault itself. The Sunset Bay PD will be watching every step.
 
 ## The city
 
-Sunset Bay is a sun-soaked coastal city on a road grid, built in three.js:
-a beach and ocean to the south, a golden-hour sun, palms, street lights and
-traffic lights, and a skyline of lit-window towers. Drive anywhere, on foot
-or behind the wheel.
+Sunset Bay is a 9×9 grid city — roads, blocks, towers, the Palm Casino, Bay Mall,
+the Docks, the Safehouse and the Sunset Garage — with day and night, traffic,
+pedestrians, traffic lights, and a police force that responds to your wanted
+level. Everything is rendered in three.js (r160, vendored offline) with no
+network request at all.
 
-## What is in the game
+## Play
 
-- **Open world on foot and by car** — steal any parked car (E to get in and
-  out), drive with WASD, and explore the whole grid.
-- **Traffic and pedestrians** — cars cruise the roads and stop at red
-  lights; pedestrians walk the sidewalks and scatter when trouble starts.
-- **Wanted level, 1–5 stars** — stealing cars, knocking pedestrians down
-  and running red lights draw the Sunset Bay PD. Police cars chase and box
-  you in; foot cops run you down on foot. Get caught standing next to a cop
-  and you are BUSTED.
-- **Respray garage** — roll into Slim's Garage with $150 and the heat is
-  cleared.
-- **Five story missions** with payouts:
-  1. **First Wheels** (+$300) — steal a car and bring it to the garage.
-  2. **The Getaway** (+$600) — pick up Rosa's crew at the Docks and lose
-     a 2-star heat on the way to the Safehouse.
-  3. **Hot Delivery** (+$500) — grab the package at the Docks and reach
-     Bayview Mall in 90 seconds.
-  4. **Repo Man** (+$800) — deal with the casino guards and steal the
-     gold car for the garage.
-  5. **The Sunset Heist** (+$2,500) — crack the vault at Casino del Sol
-     and escape a 3-star alarm to the Safehouse.
-- **Combat** — punch with F; guards and pedestrians go down, and the law
-  notices.
-- **HUD with a live minimap** — cash, health, wanted stars, the clock,
-  speed, the mission objective, a countdown timer and a top-down map with
-  the mission marker, police and the player.
-- **Start screen, pause, and save/load** — your cash, health, missions and
-  position save to the browser and come back with Continue.
-- **Day and night** — press T to cycle the time of day, from noon blue to
-  sunset gold to night, with the street lights coming on.
-- **Synthesised sound** — engine hum, police siren, punches, cash and
-  mission jingles, all generated with WebAudio. No audio files.
+- **W A S D** — move on foot / drive
+- **Shift** — sprint
+- **E** — get in / out of a car (any car on the street is yours to take)
+- **F** — punch
+- **P** — pause · **M** — jobs · **T** — time of day
+- Drag the mouse to look around
 
-## Controls
+Steal a car and the cops notice. Wanted stars 1–5 bring police cars and foot
+officers; run a red light and they notice that too. Get to the Sunset Garage and
+a $150 respray clears your heat. Knock out a pedestrian or hit one with your
+car and the stars go up. Health, cash and completed jobs save to localStorage —
+come back and continue where you left off.
 
-| Key | Action |
-| --- | --- |
-| WASD | Move / drive |
-| E | Enter or exit a car |
-| F | Punch |
-| P | Pause |
-| M | Mission list |
-| T | Cycle time of day |
-| Shift | Sprint |
-| Mouse drag | Look around |
+## The five jobs
 
-## How to play
+1. **Borrowed Wheels** — steal a car, bring it to the Sunset Garage. +$300
+2. **Two for the Road** — pick up the crew at the Docks, take them to the
+   Safehouse. +$600
+3. **Hot Delivery** — grab the package at the Docks, deliver it to Bay Mall
+   in 90 seconds. +$500
+4. **Repo Man** — deal with the casino guards, bring the gold car to the
+   Garage. +$800
+5. **The Sunset Heist** — crack the vault at the Palm Casino, escape to the
+   Safehouse. +$2,500
 
-Open `game/index.html` in desktop Chrome, or serve the `game/` folder with
-any static server (`node serve.ts`, then http://localhost:8080). The game
-is plain static files with no build step and no network requests: three.js
-is vendored offline under `game/vendor/three.min.js`.
+## Run it
+
+Open `game/index.html` in a desktop browser — no build step, no server needed
+(serve it with `node serve.ts` if you prefer). `?seed=1337` fixes the city
+layout; `?lowfx=1` turns off shadows for slower machines.
 
 ## Files
 
-- `game/index.html` — the page, HUD and menus
-- `game/src/util.js` — seeded random numbers and small helpers
-- `game/src/world.js` — the city, sky, lights and traffic lights
-- `game/src/actors.js` — cars, pedestrians, traffic, police
-- `game/src/audio.js` — synthesised WebAudio sound
-- `game/src/missions.js` — the five story missions
-- `game/src/game.js` — the game itself: driving, combat, wanted, HUD
-- `game/src/main.js` — boot and the debug API
-- `screenshots/` — four screenshots taken from the game
-- `main.ts` — hands the entry in: copies `game/` and `screenshots/` and
-  writes `dossier.json`
+- `game/src/util.js` — seeded RNG, grid helpers, math
+- `game/src/world.js` — the city: roads, buildings, landmarks, traffic
+  lights, sky and day/night
+- `game/src/actors.js` — the player, cars (parked, traffic, police),
+  pedestrians, guards and crew
+- `game/src/audio.js` — WebAudio synth sound (engine, punches, sirens, cash)
+- `game/src/missions.js` — the five jobs and their payouts
+- `game/src/game.js` — the game itself: state machine, driving, police and
+  wanted, respray, combat, save/load, HUD and minimap
+- `game/src/main.js` — boot and the `window.SUNSET` debug API
+- `game/vendor/three.min.js` — three.js r160, vendored offline
 
-## License
-
-MIT — see `LICENSE`.
+Built by Noman7860000 for the make.fun GTA 6 bounty. Original city,
+characters, names and story — nothing from Rockstar or GTA.
