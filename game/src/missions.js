@@ -1,208 +1,157 @@
-// SUNSET BAY — the five missions. Each has steps, an objective line and a
-// payout. The manager works on the game object; game.js wires it in.
-import { dist2d } from './util.js';
-import { makeCar, makeGuard } from './actors.js';
+// SUNSET BAY — the five missions for Slim Vasquez and Rosa Marín.
+// Written fresh for the v9 rebuild.
+import { dist } from './util.js';
 
-export const MISSION_LIST = [
-  { id: 'm1', name: 'First Wheels', fixer: 'Slim Vasquez', reward: 300, desc: 'Steal a car and take it to the Sunset Garage.' },
+export const MISSIONS = [
+  { id: 'm1', name: 'The First Job', fixer: 'Slim Vasquez', reward: 300, desc: 'Steal a car and bring it to the Sunset Garage.' },
   { id: 'm2', name: 'The Getaway', fixer: 'Rosa Marín', reward: 600, desc: 'Pick up the crew at the Docks, then lose the heat at the Safehouse.' },
   { id: 'm3', name: 'Hot Delivery', fixer: 'Slim Vasquez', reward: 500, desc: 'Grab the package at the Docks and deliver it to Bay Mall in 90 seconds.' },
-  { id: 'm4', name: 'Repo Man', fixer: 'Rosa Marín', reward: 800, desc: 'Beat the casino guards, steal the gold car, bring it to the Garage.' },
-  { id: 'm5', name: 'The Sunset Heist', fixer: 'Slim Vasquez', reward: 2500, desc: 'Rob the Palm Casino vault, then escape to the Safehouse.' },
+  { id: 'm4', name: 'Repo Man', fixer: 'Rosa Marín', reward: 800, desc: 'Beat down the casino guards and steal the gold car for the Garage.' },
+  { id: 'm5', name: 'The Sunset Heist', fixer: 'Slim Vasquez', reward: 2500, desc: 'Crack the Palm Casino vault, then escape to the Safehouse.' },
 ];
 
-export function missionDef(id) {
-  return MISSION_LIST.find((m) => m.id === id) || null;
-}
+const NEAR = 12; // mission trigger radius
 
-function activePos(game) {
-  if (game.playerCar) return { x: game.playerCar.x, z: game.playerCar.z };
-  return { x: game.player.x, z: game.player.z };
-}
-
-function clearMissionActors(game) {
-  game.enemies = [];
-  game.enemiesDown = 0;
-  if (game.markedCar) {
-    // The gold car stays in the world as an ordinary parked car.
-    game.markedCar.kind = 'parked';
-    game.markedCar = null;
+export class MissionManager {
+  constructor(game) {
+    this.game = game;
+    this.current = null; // {id, step, objective, holdTimer, timer, boardTimer}
+    this.completed = [];
   }
-  game.inMarkedCar = false;
-  game.crewInCar = 0;
-  game.crewTimer = 0;
-  game.m5Hold = 0;
-}
 
-export function startMission(game, id) {
-  const def = missionDef(id);
-  if (!def) return false;
-  if (game.completed.includes(id)) {
-    game.toast(`"${def.name}" is already done.`);
-    return false;
+  get def() {
+    return this.current ? MISSIONS.find((m) => m.id === this.current.id) : null;
   }
-  clearMissionActors(game);
-  game.mission = id;
-  game.missionStep = 0;
-  game.missionTimer = 0;
-  game.objective = '';
-  switch (id) {
-    case 'm1':
-      game.objective = 'Steal a car';
-      break;
-    case 'm2':
-      game.objective = 'Steal a car and take it to the Docks';
-      break;
-    case 'm3':
-      game.objective = 'Go to the Docks and pick up the package';
-      break;
-    case 'm4': {
-      game.objective = 'Beat down the casino guards';
-      const g1 = makeGuard(104, 108);
-      const g2 = makeGuard(108, 112);
-      game.enemies.push(g1, g2);
-      break;
+
+  start(id) {
+    const def = MISSIONS.find((m) => m.id === id);
+    if (!def) return;
+    this._clearMissionActors();
+    const g = this.game;
+    g.crewInCar = 0;
+    g.markedCar = null;
+    g.inMarkedCar = false;
+    this.current = { id, step: 0, objective: '', holdTimer: 0, timer: 0, boardTimer: 0 };
+    if (id === 'm1') this.current.objective = 'Steal a car';
+    if (id === 'm2') {
+      this.current.objective = 'Pick up the crew at the Docks';
+      g.spawnCrew();
     }
-    case 'm5':
-      game.objective = 'Rob the casino vault — stay in the zone';
-      break;
-    default:
-      break;
+    if (id === 'm3') this.current.objective = 'Pick up the package at the Docks';
+    if (id === 'm4') {
+      this.current.objective = 'Beat down the two guards at the Palm Casino';
+      g.spawnGuards();
+    }
+    if (id === 'm5') this.current.objective = 'Rob the vault at the Palm Casino';
+    g.toast(`${def.name} — ${def.fixer}: ${this.current.objective}`);
+    g.hud();
   }
-  game.audio.missionStart();
-  game.toast(`${def.name} — ${def.desc}`);
-  return true;
-}
 
-export function abortMission(game, reason) {
-  if (!game.mission) return;
-  clearMissionActors(game);
-  game.mission = null;
-  game.missionStep = 0;
-  game.missionTimer = 0;
-  game.objective = '';
-  if (reason) game.toast(reason);
-}
-
-function completeMission(game) {
-  const def = missionDef(game.mission);
-  if (!def) return;
-  game.cash += def.reward;
-  game.completed.push(def.id);
-  game.audio.cash();
-  game.audio.missionComplete();
-  game.toast(`${def.name} complete! +$${def.reward}`);
-  game.autosave();
-  const done = def.id;
-  clearMissionActors(game);
-  game.mission = null;
-  game.missionStep = 0;
-  game.missionTimer = 0;
-  game.objective = '';
-  // eslint-disable-next-line no-unused-vars
-  void done;
-}
-
-export function onEnterCar(game, car) {
-  if (game.mission === 'm1' && game.missionStep === 0) {
-    game.missionStep = 1;
-    game.objective = 'Drive it to the Sunset Garage';
-    game.toast('Nice wheels. Now get it to the Garage.');
-  } else if (game.mission === 'm4' && game.missionStep === 1 && car === game.markedCar) {
-    game.inMarkedCar = true;
-    game.objective = 'Take the gold car to the Sunset Garage';
-    game.toast('That is the one. Drive it to the Garage — easy now.');
+  _clearMissionActors() {
+    const g = this.game;
+    for (const e of g.enemies) if (e.mesh) g.scene.remove(e.mesh);
+    g.enemies = [];
+    g.enemiesDown = 0;
+    for (const c of g.crew) if (c.mesh) g.scene.remove(c.mesh);
+    g.crew = [];
+    if (g.markedCar && g.markedCar.mesh) {
+      g.scene.remove(g.markedCar.mesh);
+      const i = g.cars.indexOf(g.markedCar);
+      if (i >= 0) g.cars.splice(i, 1);
+    }
+    g.markedCar = null;
   }
-}
 
-export function updateMissions(game, dt) {
-  if (!game.mission) return;
-  const lm = game.world.landmarks;
-  const pos = activePos(game);
-  switch (game.mission) {
-    case 'm1': {
-      if (game.missionStep === 1 && game.playerCar && dist2d(game.playerCar.x, game.playerCar.z, lm.garage.x, lm.garage.z) < 12) {
-        completeMission(game);
+  complete() {
+    const g = this.game;
+    const def = this.def;
+    if (!def || !this.current) return;
+    g.cash += def.reward;
+    this.completed.push(def.id);
+    g.toast(`${def.name} complete! +$${def.reward}`);
+    g.audio.cash();
+    g.audio.mission();
+    this.current = null;
+    g.hud();
+  }
+
+  fail(msg) {
+    const g = this.game;
+    g.toast(msg);
+    g.audio.fail();
+    this.current = null;
+    g.hud();
+  }
+
+  update(dt) {
+    const g = this.game;
+    const m = this.current;
+    if (!m) return;
+    const lm = g.world.landmarks;
+    const near = (pt, r) => dist(g.player.x, g.player.z, pt.x, pt.z) < r
+      || (g.playerCar && dist(g.playerCar.x, g.playerCar.z, pt.x, pt.z) < r);
+    const nearCar = (pt, r) => g.playerCar && dist(g.playerCar.x, g.playerCar.z, pt.x, pt.z) < r;
+
+    if (m.id === 'm1') {
+      if (m.step === 0 && g.playerCar) {
+        m.step = 1;
+        m.objective = 'Drive it to the Sunset Garage';
+        g.hud();
+      } else if (m.step === 1 && nearCar(lm.garage, NEAR)) {
+        this.complete();
       }
-      break;
-    }
-    case 'm2': {
-      if (game.missionStep === 0) {
-        // The crew hops in fast: a car arriving at speed crosses the zone in
-        // ~1-2 game-seconds, so boarding has to finish inside that window.
-        if (game.playerCar && dist2d(game.playerCar.x, game.playerCar.z, lm.docks.x, lm.docks.z) < 20) {
-          game.crewTimer += dt;
-          if (game.crewTimer >= 0.4 && game.crewInCar < 2) {
-            game.crewTimer = 0;
-            game.crewInCar += 1;
-            game.toast(game.crewInCar === 1 ? 'Crew member hopped in.' : 'Crew is in. Go!');
+    } else if (m.id === 'm2') {
+      if (m.step === 0 && nearCar(lm.docks, 14)) {
+        m.boardTimer += dt;
+        if (m.boardTimer > 1 && g.crewInCar < 1) { g.crewInCar = 1; g.hud(); }
+        if (m.boardTimer > 2 && g.crewInCar < 2) {
+          g.crewInCar = 2;
+          m.step = 1;
+          m.objective = 'Lose the heat — get to the Safehouse';
+          g.setWanted(2);
+          g.toast('Crew aboard! 2 stars — lose them at the Safehouse');
+          g.hud();
+        }
+      } else if (m.step === 1 && nearCar(lm.safehouse, NEAR)) {
+        this.complete();
+      }
+    } else if (m.id === 'm3') {
+      if (m.step === 0 && dist(g.player.x, g.player.z, lm.docks.x, lm.docks.z) < 10) {
+        m.step = 1;
+        m.timer = 90;
+        m.objective = 'Deliver to Bay Mall — 90 seconds!';
+        g.hud();
+      } else if (m.step === 1) {
+        m.timer -= dt;
+        if (m.timer <= 0) { this.fail('Delivery failed — too slow.'); return; }
+        if (near(lm.mall, NEAR)) this.complete();
+      }
+    } else if (m.id === 'm4') {
+      if (m.step === 0 && g.enemiesDown >= 2) {
+        m.step = 1;
+        m.objective = 'Steal the gold car';
+        g.spawnMarkedCar();
+        g.hud();
+      } else if (m.step === 1 && g.inMarkedCar && nearCar(lm.garage, NEAR)) {
+        this.complete();
+      }
+    } else if (m.id === 'm5') {
+      if (m.step === 0) {
+        if (dist(g.player.x, g.player.z, lm.casino.x, lm.casino.z) < NEAR) {
+          m.holdTimer += dt;
+          if (m.holdTimer >= 8) {
+            m.step = 1;
+            m.objective = 'Escape to the Safehouse — 3 stars!';
+            g.setWanted(3);
+            g.toast('Vault cracked! 3 stars — run for the Safehouse');
+            g.hud();
           }
-          if (game.crewInCar >= 2) {
-            game.missionStep = 1;
-            game.setWanted(2);
-            game.objective = 'Lose the heat — get to the Safehouse';
-            game.toast('The crew is in — and so are the cops. Run!');
-          }
+        } else {
+          m.holdTimer = 0;
         }
-      } else if (game.playerCar && game.crewInCar >= 2
-        && dist2d(game.playerCar.x, game.playerCar.z, lm.safehouse.x, lm.safehouse.z) < 12) {
-        completeMission(game);
+      } else if (m.step === 1 && near(lm.safehouse, NEAR)) {
+        this.complete();
       }
-      break;
     }
-    case 'm3': {
-      if (game.missionStep === 0) {
-        if (dist2d(pos.x, pos.z, lm.docks.x, lm.docks.z) < 12) {
-          game.missionStep = 1;
-          game.missionTimer = 90;
-          game.objective = 'Deliver the package to Bay Mall — 90 seconds!';
-          game.toast('Package secured. 90 seconds — move!');
-        }
-      } else {
-        game.missionTimer -= dt;
-        if (game.missionTimer <= 0) {
-          game.missionTimer = 0;
-          game.audio.fail();
-          abortMission(game, 'The delivery went cold. Too slow.');
-        } else if (dist2d(pos.x, pos.z, lm.mall.x, lm.mall.z) < 12) {
-          completeMission(game);
-        }
-      }
-      break;
-    }
-    case 'm4': {
-      game.enemiesDown = game.enemies.filter((e) => e.state === 'down').length;
-      if (game.missionStep === 0 && game.enemiesDown >= 2) {
-        game.missionStep = 1;
-        const gold = makeCar('parked', 112, 104, Math.PI / 2, 0xe0a52e);
-        gold.marked = true;
-        game.cars.push(gold);
-        game.markedCar = gold;
-        game.objective = 'Steal the gold car and take it to the Garage';
-        game.toast('Guards are down. The gold car is yours — take it.');
-      } else if (game.missionStep === 1 && game.inMarkedCar && game.playerCar
-        && dist2d(game.playerCar.x, game.playerCar.z, lm.garage.x, lm.garage.z) < 12) {
-        completeMission(game);
-      }
-      break;
-    }
-    case 'm5': {
-      if (game.missionStep === 0) {
-        if (dist2d(pos.x, pos.z, lm.casino.x, lm.casino.z) < 12) {
-          game.m5Hold += dt;
-          if (game.m5Hold >= 8) {
-            game.missionStep = 1;
-            game.setWanted(3);
-            game.objective = 'Vault cracked! Escape to the Safehouse!';
-            game.toast('Vault cracked — the alarm is screaming. Run!');
-          }
-        }
-      } else if (dist2d(pos.x, pos.z, lm.safehouse.x, lm.safehouse.z) < 12) {
-        completeMission(game);
-      }
-      break;
-    }
-    default:
-      break;
   }
 }

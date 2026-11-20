@@ -3,92 +3,89 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SUNSET BAY — a GTA-style open world</title>
+<title>SUNSET BAY — Open-World Crime</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0e1e; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #eef1f5; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #f2f2f2; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  #hud { position: fixed; inset: 0; pointer-events: none; }
-  #hud-top { position: absolute; top: 12px; left: 14px; display: flex; gap: 14px; align-items: center; }
-  #cash { font-size: 28px; font-weight: 800; color: #7ee081; text-shadow: 0 2px 6px rgba(0,0,0,.7); }
-  #wanted { font-size: 22px; color: #ffd23f; text-shadow: 0 2px 6px rgba(0,0,0,.7); letter-spacing: 2px; }
-  #health-wrap { width: 130px; height: 16px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 8px; overflow: hidden; position: relative; }
-  #health-bar { height: 100%; width: 100%; background: #e5534b; }
-  #health-text { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; font-weight: 700; }
-  #objective { position: absolute; top: 52px; left: 14px; font-size: 15px; font-weight: 600; background: rgba(0,0,0,.55); padding: 6px 10px; border-radius: 6px; max-width: 420px; }
-  #timer { position: absolute; top: 96px; left: 14px; font-size: 26px; font-weight: 800; color: #ffd23f; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
-  #speed { position: absolute; right: 16px; bottom: 14px; font-size: 22px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
-  #minimap { position: absolute; right: 14px; top: 12px; width: 180px; height: 180px; border: 2px solid rgba(255,255,255,.35); border-radius: 8px; background: #14161a; }
-  #toasts { position: absolute; left: 50%; transform: translateX(-50%); bottom: 90px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
-  .toast { background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.25); padding: 7px 14px; border-radius: 6px; font-size: 15px; font-weight: 600; }
-  #help { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: rgba(255,255,255,.75); text-shadow: 0 1px 4px rgba(0,0,0,.8); }
-  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(5,8,18,.72); text-align: center; z-index: 10; }
-  .overlay h1 { margin: 0; font-size: 54px; letter-spacing: 4px; color: #ffb347; text-shadow: 0 4px 18px rgba(0,0,0,.8); }
-  .overlay h2 { margin: 0; font-size: 40px; letter-spacing: 3px; }
-  .overlay p { margin: 0; font-size: 16px; color: #c8cdd8; max-width: 520px; line-height: 1.5; }
-  .btn { pointer-events: auto; cursor: pointer; font-size: 19px; font-weight: 700; padding: 12px 30px; border-radius: 8px; border: none; background: #ff9f1c; color: #1a1206; }
-  .btn:hover { background: #ffb347; }
-  .btn.secondary { background: #2a3040; color: #eef1f5; }
-  #missions { background: rgba(5,8,18,.82); }
-  #mission-list { display: flex; flex-direction: column; gap: 10px; width: min(560px, 90vw); }
-  .mission-item { pointer-events: auto; cursor: pointer; text-align: left; background: #1c2230; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 10px 14px; }
-  .mission-item:hover { border-color: #ff9f1c; }
-  .mission-item .mi-name { font-size: 17px; font-weight: 800; }
-  .mission-item .mi-reward { float: right; color: #7ee081; font-weight: 800; }
-  .mission-item .mi-desc { font-size: 13px; color: #aab2c0; margin-top: 3px; }
-  .mission-item .mi-status { font-size: 12px; font-weight: 700; color: #ffd23f; margin-top: 4px; }
-  .mission-item.done .mi-status { color: #7ee081; }
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .panel { position: fixed; z-index: 5; }
+  #hud-top { top: 12px; left: 12px; background: rgba(10, 12, 18, 0.72); border: 1px solid rgba(255, 190, 60, 0.45); border-radius: 10px; padding: 10px 14px; min-width: 210px; }
+  #hud-cash { font-size: 26px; font-weight: 800; color: #ffd34d; letter-spacing: 0.5px; }
+  #hud-wanted { font-size: 18px; color: #ff5a5a; letter-spacing: 2px; margin-top: 2px; }
+  .bar { height: 8px; background: #222; border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 4px; }
+  #hud-health { background: #37c978; width: 100%; }
+  #hud-carhp { background: #4aa8ff; width: 0%; }
+  .bar-label { font-size: 11px; color: #bbb; margin-top: 4px; }
+  #objective { top: 12px; left: 50%; transform: translateX(-50%); background: rgba(10, 12, 18, 0.72); border-radius: 8px; padding: 8px 16px; font-size: 15px; font-weight: 600; color: #ffe9a8; max-width: 60vw; text-align: center; }
+  #timer { top: 56px; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 800; color: #ff6b6b; text-shadow: 0 2px 8px rgba(0,0,0,0.7); }
+  #toasts { left: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+  .toast { background: rgba(10, 12, 18, 0.85); border-left: 4px solid #ffd34d; border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  #missions { top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; background: rgba(5, 6, 10, 0.72); z-index: 8; }
+  #mission-list { background: #141824; border: 1px solid #ffd34d; border-radius: 12px; padding: 20px 24px; width: min(520px, 90vw); }
+  #mission-list h2 { margin: 0 0 4px; color: #ffd34d; letter-spacing: 1px; }
+  #mission-list p { margin: 0 0 12px; color: #aaa; font-size: 13px; }
+  .mission-item { border-top: 1px solid #2a2f42; padding: 10px 0; font-size: 14px; line-height: 1.45; }
+  .mission-item .mdesc { color: #bbb; }
+  .mission-item .mstate { color: #37c978; font-weight: 700; }
+  .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: radial-gradient(ellipse at center, rgba(20,16,8,0.88), rgba(5,6,10,0.96)); z-index: 10; text-align: center; }
+  .overlay h1 { font-size: 64px; margin: 0; letter-spacing: 4px; color: #ffd34d; text-shadow: 0 4px 24px rgba(255, 180, 40, 0.45); }
+  .overlay h1 .bay { color: #ff5a5a; }
+  .overlay .tag { color: #ddd; font-size: 16px; margin: 8px 0 4px; }
+  .overlay .sub { color: #999; font-size: 13px; margin-bottom: 22px; max-width: 480px; line-height: 1.5; }
+  .btn { display: block; margin: 8px auto; padding: 12px 34px; font-size: 17px; font-weight: 700; color: #14100a; background: #ffd34d; border: none; border-radius: 8px; cursor: pointer; }
+  .btn:hover { background: #ffdf7a; }
+  .btn.secondary { background: #2a2f42; color: #eee; }
+  #pause { display: none; }
+  #end { display: none; }
+  #end-title { font-size: 56px; }
+  #controls-hint { position: fixed; right: 12px; bottom: 12px; z-index: 5; color: #bbb; font-size: 12px; background: rgba(10,12,18,0.6); border-radius: 6px; padding: 6px 10px; text-align: right; line-height: 1.6; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="SUNSET BAY: drive, steal cars, run missions across a 3D open-world city"></canvas>
-<div id="hud">
-  <div id="hud-top">
-    <div id="cash">$250</div>
-    <div id="wanted"></div>
-    <div id="health-wrap"><div id="health-bar"></div><span id="health-text">100</span></div>
+<canvas id="game" aria-label="Sunset Bay: drive, steal cars and run missions across a 3D open world"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud-top" class="panel">
+  <div id="hud-cash">$250</div>
+  <div id="hud-wanted">☆☆☆☆☆</div>
+  <div class="bar"><div id="hud-health"></div></div>
+  <div class="bar-label">HEALTH</div>
+  <div class="bar"><div id="hud-carhp"></div></div>
+  <div class="bar-label">CAR</div>
+</div>
+<div id="objective" class="panel">Free roam — press M for missions</div>
+<div id="timer" class="panel"></div>
+<div id="toasts" class="panel"></div>
+
+<div id="missions" class="panel">
+  <div id="mission-list">
+    <h2>MISSIONS</h2>
+    <p>Work for Slim Vasquez and Rosa Marín. Pick one from the phone — press M to close.</p>
   </div>
-  <div id="objective">Free roam — press M for missions</div>
-  <div id="timer"></div>
-  <div id="speed"></div>
-  <canvas id="minimap" width="180" height="180"></canvas>
-  <div id="toasts"></div>
-  <div id="help">WASD drive / move &middot; Shift boost &middot; E enter car &middot; F punch &middot; P pause &middot; M missions &middot; T time of day &middot; drag mouse to look</div>
 </div>
 
 <div id="menu" class="overlay">
-  <h1>SUNSET BAY</h1>
-  <p>Cole Vance is back in town with $250 and two fixers who owe him work.
-     Steal cars, dodge the cops, run five missions — and pull the Sunset Heist.</p>
-  <button class="btn" id="btn-start">Start</button>
-  <button class="btn secondary" id="btn-continue" style="display:none">Continue</button>
-  <p>WASD drive &middot; E enter car &middot; F punch &middot; P pause &middot; M missions</p>
+  <h1>SUNSET <span class="bay">BAY</span></h1>
+  <div class="tag">Cole Vance · $250 · one city · five jobs</div>
+  <div class="sub">A 3D open-world crime game. Steal cars, dodge the Sunset Bay PD, run jobs for Slim and Rosa, and pull the Sunset Heist. WASD drive &amp; move · Shift boost · E enter car · F punch · P pause · M missions · T time of day.</div>
+  <button id="btn-start" class="btn">START</button>
+  <button id="btn-continue" class="btn secondary" style="display:none">CONTINUE</button>
 </div>
 
-<div id="paused" class="overlay" style="display:none">
-  <h2>PAUSED</h2>
-  <p>Press P to keep playing.</p>
+<div id="pause" class="overlay">
+  <h1 id="pause-title" style="font-size:44px">PAUSED</h1>
+  <div class="tag">Press P to keep playing.</div>
 </div>
 
-<div id="end-screen" class="overlay" style="display:none">
-  <h2 id="end-title">BUSTED</h2>
-  <p id="end-sub">The cops caught up with you.</p>
-  <button class="btn" id="btn-respawn">Respawn at the Safehouse</button>
+<div id="end" class="overlay">
+  <h1 id="end-title">BUSTED</h1>
+  <div class="tag" id="end-text"></div>
+  <button id="btn-respawn" class="btn">RESPAWN</button>
 </div>
 
-<div id="missions" class="overlay" style="display:none">
-  <h2>MISSIONS</h2>
-  <div id="mission-list">
-    <div class="mission-item" data-id="m1"><span class="mi-reward">+$300</span><div class="mi-name">m1 — First Wheels</div><div class="mi-desc">Slim Vasquez: steal a car and take it to the Sunset Garage.</div><div class="mi-status">Available</div></div>
-    <div class="mission-item" data-id="m2"><span class="mi-reward">+$600</span><div class="mi-name">m2 — The Getaway</div><div class="mi-desc">Rosa Marín: pick up the crew at the Docks, then lose the heat at the Safehouse.</div><div class="mi-status">Available</div></div>
-    <div class="mission-item" data-id="m3"><span class="mi-reward">+$500</span><div class="mi-name">m3 — Hot Delivery</div><div class="mi-desc">Slim Vasquez: grab the package at the Docks, deliver it to Bay Mall in 90 seconds.</div><div class="mi-status">Available</div></div>
-    <div class="mission-item" data-id="m4"><span class="mi-reward">+$800</span><div class="mi-name">m4 — Repo Man</div><div class="mi-desc">Rosa Marín: beat the casino guards, steal the gold car, bring it to the Garage.</div><div class="mi-status">Available</div></div>
-    <div class="mission-item" data-id="m5"><span class="mi-reward">+$2,500</span><div class="mi-name">m5 — The Sunset Heist</div><div class="mi-desc">Slim Vasquez: rob the Palm Casino vault, then escape to the Safehouse.</div><div class="mi-status">Available</div></div>
-  </div>
-  <p>Click a mission to start it, or press M to close.</p>
-</div>
+<div id="controls-hint">WASD move / drive · Shift boost<br>E enter car · F punch · P pause<br>M missions · T time of day</div>
 
-<p id="status" role="status" aria-live="polite"></p>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
